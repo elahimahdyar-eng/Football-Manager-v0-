@@ -1,11 +1,11 @@
-const CACHE_NAME = "football-manager-v4";
+const CACHE_NAME = "football-manager-v5";
 
 const APP_FILES = [
-  "/Football-manager-v0-/",
-  "/Football-manager-v0-/index.html",
-  "/Football-manager-v0-/manifest.json",
-  "/Football-manager-v0-/icon-192.png",
-  "/Football-manager-v0-/icon-512.png"
+  "./",
+  "./index.html",
+  "./manifest.json",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", event => {
