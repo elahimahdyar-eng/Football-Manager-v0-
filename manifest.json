@@ -2,20 +2,20 @@
   "name": "Football Manager",
   "short_name": "Football Manager",
   "description": "Football Manager Web App",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/Football-manager-v0-/",
+  "scope": "/Football-manager-v0-/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#111827",
   "theme_color": "#111827",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/Football-manager-v0-/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "icon-512.png",
+      "src": "/Football-manager-v0-/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
