@@ -1,9 +1,11 @@
-const CACHE_NAME = "football-manager-v1";
+const CACHE_NAME = "football-manager-v2";
 
 const APP_FILES = [
   "./",
   "./index.html",
-  "./manifest.json"
+  "./manifest.json",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", event => {
@@ -14,7 +16,19 @@ self.addEventListener("install", event => {
 });
 
 self.addEventListener("activate", event => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    caches.clients.claim().then(() => {
+      return caches.keys().then(keys => {
+        return Promise.all(
+          keys.map(key => {
+            if (key !== CACHE_NAME) {
+              return caches.delete(key);
+            }
+          })
+        );
+      });
+    })
+  );
 });
 
 self.addEventListener("fetch", event => {
