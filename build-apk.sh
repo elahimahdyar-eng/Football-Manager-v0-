@@ -139,7 +139,7 @@ create_android_project() {
 
   # Copy web assets
   log "کپی فایل‌های وب..."
-  cp "$SCRIPT_DIR/app.html" "$PROJECT_DIR/app/src/main/assets/www/index.html"
+  cp "$SCRIPT_DIR/index.html" "$PROJECT_DIR/app/src/main/assets/www/index.html"
   cp -r "$SCRIPT_DIR/css" "$PROJECT_DIR/app/src/main/assets/www/"
   cp -r "$SCRIPT_DIR/js" "$PROJECT_DIR/app/src/main/assets/www/"
   cp "$SCRIPT_DIR/icon-192.png" "$PROJECT_DIR/app/src/main/assets/www/"
@@ -148,7 +148,7 @@ create_android_project() {
   cp "$SCRIPT_DIR/sw-app.js" "$PROJECT_DIR/app/src/main/assets/www/"
 
   # Copy offline game assets
-  cp "$SCRIPT_DIR/index.html" "$PROJECT_DIR/app/src/main/assets/www/"
+  cp "$SCRIPT_DIR/offline.html" "$PROJECT_DIR/app/src/main/assets/www/offline.html"
   cp "$SCRIPT_DIR/service-worker.js" "$PROJECT_DIR/app/src/main/assets/www/"
 
   # Fix paths in the copied HTML (make relative paths work for local)
@@ -160,7 +160,8 @@ create_android_project() {
   sed -i 's|src="./icon-|src="icon-|g' "$PROJECT_DIR/app/src/main/assets/www/index.html"
 
   # Fix paths in offline game HTML too
-  sed -i 's|href="./css/style.css"|href="css/style.css"|g' "$PROJECT_DIR/app/src/main/assets/www/index.html" 2>/dev/null || true
+  sed -i 's|href="./css/style.css"|href="css/style.css"|g' "$PROJECT_DIR/app/src/main/assets/www/offline.html" 2>/dev/null || true
+  sed -i 's|src="./js/|src="js/|g' "$PROJECT_DIR/app/src/main/assets/www/offline.html" 2>/dev/null || true
 
   ok "فایل‌های وب کپی شدند"
 }

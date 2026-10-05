@@ -121,16 +121,17 @@ mkdir "%PROJECT_DIR%\gradle\wrapper" 2>nul
 echo    کپی فایل‌های وب...
 xcopy /E /I /Y /Q "%SCRIPT_DIR%css" "%PROJECT_DIR%\app\src\main\assets\www\css" >nul
 xcopy /E /I /Y /Q "%SCRIPT_DIR%js" "%PROJECT_DIR%\app\src\main\assets\www\js" >nul
-copy /Y "%SCRIPT_DIR%app.html" "%PROJECT_DIR%\app\src\main\assets\www\index.html" >nul
+copy /Y "%SCRIPT_DIR%index.html" "%PROJECT_DIR%\app\src\main\assets\www\index.html" >nul
 copy /Y "%SCRIPT_DIR%icon-192.png" "%PROJECT_DIR%\app\src\main\assets\www\" >nul
 copy /Y "%SCRIPT_DIR%icon-512.png" "%PROJECT_DIR%\app\src\main\assets\www\" >nul
 copy /Y "%SCRIPT_DIR%manifest-app.json" "%PROJECT_DIR%\app\src\main\assets\www\" >nul
 copy /Y "%SCRIPT_DIR%sw-app.js" "%PROJECT_DIR%\app\src\main\assets\www\" >nul
-copy /Y "%SCRIPT_DIR%index.html" "%PROJECT_DIR%\app\src\main\assets\www\game.html" >nul
+copy /Y "%SCRIPT_DIR%offline.html" "%PROJECT_DIR%\app\src\main\assets\www\offline.html" >nul
 copy /Y "%SCRIPT_DIR%service-worker.js" "%PROJECT_DIR%\app\src\main\assets\www\" >nul
 
 :: Fix paths in HTML using PowerShell
 powershell -Command "& { $f='%PROJECT_DIR%\app\src\main\assets\www\index.html'; $c=Get-Content $f -Raw; $c=$c -replace 'href=\"\.\/css/app\.css\"','href=\"css/app.css\"'; $c=$c -replace 'src=\"\.\/js/','src=\"js/'; $c=$c -replace 'href=\"\.\/manifest-app\.json\"','href=\"manifest-app.json\"'; $c=$c -replace 'href=\"\.\/icon-192\.png\"','href=\"icon-192.png\"'; $c=$c -replace 'src=\"\.\/sw-app\.js\"','src=\"sw-app.js\"'; Set-Content $f -Value $c -NoNewline }"
+powershell -Command "& { $f='%PROJECT_DIR%\app\src\main\assets\www\offline.html'; $c=Get-Content $f -Raw; $c=$c -replace 'href=\"\.\/css/style\.css\"','href=\"css/style.css\"'; $c=$c -replace 'src=\"\.\/js/','src=\"js/'; Set-Content $f -Value $c -NoNewline }"
 
 :: Generate project files
 echo    ساخت فایل‌های پروژه...

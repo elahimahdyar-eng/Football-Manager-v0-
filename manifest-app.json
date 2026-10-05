@@ -2,7 +2,7 @@
   "name": "مدیر تیم",
   "short_name": "مدیر تیم",
   "description": "شبیه‌ساز فوتبال آنلاین — تیمت رو بساز و قهرمان شو",
-  "start_url": "/app.html",
+  "start_url": "/index.html",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

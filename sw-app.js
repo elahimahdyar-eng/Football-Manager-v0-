@@ -1,9 +1,9 @@
 /* ============================================================
    sw-app.js — Service Worker for PWA (مدیر تیم)
    ============================================================ */
-const CACHE_NAME = 'manager-v1';
+const CACHE_NAME = 'manager-v2';
 const STATIC_ASSETS = [
-  './app.html',
+  './index.html',
   './css/app.css',
   './js/app.js',
   './js/util.js',
@@ -15,7 +15,7 @@ const STATIC_ASSETS = [
   './icon-512.png',
   './manifest-app.json',
   // Offline game assets
-  './index.html',
+  './offline.html',
   './css/style.css',
   './js/boot.js',
   './js/challenge.js',
@@ -77,7 +77,7 @@ self.addEventListener('fetch', event => {
       }).catch(() => {
         // Offline fallback
         if (event.request.mode === 'navigate') {
-          return caches.match('./app.html');
+          return caches.match('./index.html');
         }
       });
     })
