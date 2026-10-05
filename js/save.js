@@ -80,6 +80,8 @@ function normalizeState(s){
   if(s.lastReportId === undefined) s.lastReportId = s.matchReports[0] ? s.matchReports[0].id : null;
   /* لیگ رفقا (گام ۱ آنلاین): فقط اگر کد لیگش سالم باشد نگه داشته می‌شود */
   if(s.asyncLeague && !validAsyncLeague(s.asyncLeague)) s.asyncLeague = null;
+  /* وضعیت آنلاین: توکن در localStorage است، اینجا فقط اطلاعات نمایشی */
+  if(s.online && !validOnline(s.online)) s.online = null;
   if(!Array.isArray(s.transferMarket) || !s.transferMarket.length) s.transferMarket = genMarket();
 
   /* آمار نامعتبر بازیکن‌ها را ترمیم کن */
@@ -139,6 +141,16 @@ function normalizeState(s){
 }
 
 /* اعتبارسنجی چیدمان ذخیره‌شده (بعد از بارگذاری) */
+function validOnline(O){
+  if(!O || typeof O !== 'object') return false;
+  if(O.player && typeof O.player !== 'object') O.player = null;
+  if(!Array.isArray(O.leagues)) O.leagues = [];
+  O.leagues = O.leagues.filter(l=> l && typeof l.id === 'string' && typeof l.name === 'string');
+  if(typeof O.currentLeague !== 'string') O.currentLeague = null;
+  O.busy = false;
+  O.error = '';
+  return true;
+}
 function validAsyncLeague(L){
   if(!L || typeof L.code !== 'string' || L.code.length < 8) return false;
   if(typeof decodeLeagueCode !== 'function') return false;

@@ -42,9 +42,10 @@ SMS_API_KEY=xxxx SMS_TEMPLATE=football-login PORT=8080 node server/index.js
 ## تست
 
 ```bash
-node tools/server-test.js     # ۵۴ بررسی E2E روی یک سرور واقعی (پورت تصادفی، داده‌ی موقت)
+node tools/server-test.js         # ۵۴ بررسی E2E روی یک سرور واقعی (پورت تصادفی، داده‌ی موقت)
+node tools/client-online-test.js  # ۳۷ بررسی یکپارچه: کلاینت واقعی ⇄ سرور واقعی (fetch واقعی، بدون mock)
+node tools/smoketest.js           # ۱۱۳ بررسی کل بازی (آفلاین، بدون سرور)
 node tools/engine-parity.js   # اثبات قطعیت موتور (کلاینت ↔ سرور)
-node tools/smoketest.js       # ۱۱۳ بررسی کل بازی
 ```
 
 ## API
@@ -108,6 +109,6 @@ Restart=always
 
 ## گام بعدی (طبق `PLAN-ONLINE.md`)
 
-- اتصال کلاینت به این API (`js/online.js` + صفحه‌ی «لیگ آنلاین»)
+- ✅ اتصال کلاینت انجام شد: تب «آنلاین» (`js/online.js`)
 - لیگ هفتگی با پنجره‌ی ثبت ترکیب + اعلان PWA
 - هرم صعود/سقوط (گروه‌های ۸ تایی) و AI جانشین برای تیم‌های خالی

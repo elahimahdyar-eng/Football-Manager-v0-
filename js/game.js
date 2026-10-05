@@ -17,6 +17,7 @@ const NAV = [
   {key:"league", label:"لیگ", icon:"🏆", subs:[
     {key:"table", label:"جدول"}, {key:"async", label:"لیگ رفقا"}, {key:"cup", label:"جام حذفی"}, {key:"stats", label:"آمار بازیکنان"}, {key:"reports", label:"گزارش‌ها"}, {key:"news", label:"اخبار"}
   ]},
+  {key:"online", label:"آنلاین", icon:"🌐"},
   {key:"settings", label:"باشگاه", icon:"⚙️", subs:[
     {key:"club", label:"امکانات"}, {key:"achievements", label:"دستاوردها"}, {key:"prefs", label:"تنظیمات"}, {key:"save", label:"ذخیره"}, {key:"load", label:"بارگذاری"}
   ]}

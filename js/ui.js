@@ -33,6 +33,7 @@ function render(){
   else if(uiMain==="league" && uiSub==="stats") c.innerHTML = renderSeasonStats();
   else if(uiMain==="league" && uiSub==="reports") c.innerHTML = renderReports();
   else if(uiMain==="league" && uiSub==="news") c.innerHTML = renderNews();
+  else if(uiMain==="online") c.innerHTML = renderOnline();
   else if(uiMain==="settings" && uiSub==="club") c.innerHTML = renderClubFacilities();
   else if(uiMain==="settings" && uiSub==="achievements") c.innerHTML = renderAchievements();
   else if(uiMain==="settings" && uiSub==="prefs") c.innerHTML = renderPrefs();
@@ -150,6 +151,7 @@ function renderDashboard(){
     <button class="btn ghost" style="width:100%;" onclick="spinLucky()" ${state.lastLuckyWeek===state.week?'disabled':''}>${state.lastLuckyWeek===state.week?'این هفته چرخوندی ✓':'چرخوندن 🎡'}</button>
   </div>
   ${lastReportCardHtml()}
+  ${onlineCardHtml()}
   ${asyncLeagueCardHtml()}
   ${challengeCardHtml()}
   <div class="card glass">

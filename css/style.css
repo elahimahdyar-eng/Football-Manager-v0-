@@ -86,7 +86,7 @@
   .btn.danger{ background:rgba(244,97,79,0.18); color:#ffb3a7; border:1px solid rgba(244,97,79,0.35);}
   .btn.small{ padding:7px 12px; font-size:0.74rem; border-radius:10px;}
   .btn:disabled{opacity:0.35; cursor:not-allowed;}
-  select, input[type=text]{ background:var(--glass-strong); border:1px solid var(--glass-border); color:var(--text); border-radius:12px; padding:10px 12px; font-family:var(--font); font-size:0.85rem; width:100%;}
+  select, input:not([type=checkbox]):not([type=range]), input[type=text]{ background:var(--glass-strong); border:1px solid var(--glass-border); color:var(--text); border-radius:12px; padding:10px 12px; font-family:var(--font); font-size:0.85rem; width:100%;}
   .avatar{ width:42px; height:42px; border-radius:12px; background:var(--glass-strong); flex:0 0 auto; overflow:hidden; border:1px solid var(--glass-border);}
   .avatar.lg{ width:64px; height:64px; border-radius:16px; }
   .player-row{ display:flex; align-items:center; gap:9px; padding:10px 8px; border-bottom:1px solid var(--glass-border); font-size:0.85rem;}

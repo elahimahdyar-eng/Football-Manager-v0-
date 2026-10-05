@@ -420,9 +420,13 @@ function serveStatic(req, res, u){
   fs.stat(abs, (err, st)=>{
     if(err || !st.isFile()) return sendJson(res, 404, { error: 'پیدا نشد.' });
     const ext = path.extname(abs).toLowerCase();
+    /* در حالت توسعه (پیش‌فرض) هیچ فایلی کش نمی‌شود تا همیشه آخرین نسخه دیده شود.
+       با CACHE=1 می‌توان کش تولیدی را روشن کرد. */
+    const prodCache = process.env.CACHE === '1';
+    const cache = prodCache ? (ext === '.html' ? 'no-cache' : 'public, max-age=300') : 'no-store';
     res.writeHead(200, {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=300',
+      'Cache-Control': cache,
       'Content-Length': st.size
     });
     fs.createReadStream(abs).pipe(res);
