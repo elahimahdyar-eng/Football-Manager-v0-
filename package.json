@@ -1,0 +1,25 @@
+{
+  "name": "football-manager",
+  "version": "0.1.0",
+  "description": "مدیر تیم — شبیه‌ساز فوتبال آنلاین",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "build:apk": "node build-apk.js",
+    "cap:init": "npx cap init 'Manager Team' com.managerteam.football --web-dir .",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open android",
+    "test": "node tools/smoketest.js"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0",
+    "adm-zip": "^0.5.10"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}

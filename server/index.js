@@ -646,7 +646,7 @@ const MIME = {
 };
 function serveStatic(req, res, u){
   let rel = decodeURIComponent(u.pathname);
-  if(rel === '/') rel = '/index.html';
+  if(rel === '/') rel = '/app.html';
   if(rel === '/server') return statusPage(res);
   const abs = path.normalize(path.join(ROOT, rel));
   if(!abs.startsWith(ROOT) || abs.includes(path.join(ROOT, 'server-data')) || abs.includes(path.join(ROOT, '.git')))
