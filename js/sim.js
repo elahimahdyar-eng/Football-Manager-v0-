@@ -49,7 +49,15 @@ function teamStrengthFor(playersArr, starterIds){
   return {
     atk: atk * fMod.atk * sMod.atk * mod,
     def: def * fMod.def * sMod.def * mod,
-    fitness, stamina
+    fitness, stamina, morale,
+    base: { atk, def },
+    mods: {
+      morale: moraleMod, fitness: fitnessMod, stamina: staminaMod,
+      captain: capMod, coach: coachMod,
+      formation: { label: FORMATIONS[state.formation].label, atk: fMod.atk, def: fMod.def },
+      style: { label: STYLES[state.style].label, atk: sMod.atk, def: sMod.def }
+    },
+    lineup: picks.map(x=>x.p)
   };
 }
 /* رقیب‌ها فقط یک عدد قدرت دارند؛ برای یکنواختی، نوسان هفتگی کوچکی می‌گیرند */
@@ -59,20 +67,95 @@ function rivalStrength(name){
   const f = 1 + (t.form||0);
   return {atk: t.strength*f, def: t.strength*f};
 }
+/* ترکیب ثابت و قطعی رقیب: از هش نام باشگاه ساخته می‌شود، پس همیشه یکسان است
+   (هم گزارش زیبا می‌شود، هم بعداً با «تیم‌های واقعی رقیب» جایگزین می‌شود) */
+const RIVAL_POS_ORDER = ['GK','DF','DF','DF','DF','MF','MF','MF','MF','FW','FW'];
+function rivalLineup(name, strength){
+  const r = engineRng('lineup:' + name);
+  return RIVAL_POS_ORDER.map((pos, i)=>{
+    const first = FIRST_NAMES[Math.floor(r()*FIRST_NAMES.length)];
+    const last  = LAST_NAMES[Math.floor(r()*LAST_NAMES.length)];
+    return {
+      id: 'rv_' + engineHash(name + '#' + i),
+      name: first + ' ' + last,
+      pos,
+      attack: clamp(Math.round((strength||65) + (r()-0.5)*14), 30, 95)
+    };
+  });
+}
+
+/* ---------- ساخت ورودی موتور برای یک طرف مسابقه ---------- */
+function buildEngineSide(name, isUser, seed){
+  if(isUser){
+    const s = teamStrengthFor(state.players, state.starters);
+    const players = s.lineup.map(p=>({ id:p.id, name:p.name, pos:p.position, attack:p.attack }));
+    return {
+      name, atk: s.atk, def: s.def, fitness: s.fitness, stamina: s.stamina, morale: s.morale,
+      players,
+      meta: { isUser: true, mods: s.mods, base: s.base }
+    };
+  }
+  const t = state.league.teams.find(x=>x.name===name);
+  const st = rivalStrength(name);
+  return {
+    name, atk: st.atk, def: st.def,
+    fitness: 100, stamina: 75, morale: 70,
+    players: rivalLineup(name, t ? t.strength : 65),
+    meta: { isUser: false, strength: t ? t.strength : 65, form: t ? (t.form||0) : 0 }
+  };
+}
+
+/* ---------- seed مسابقه ----------
+   آفلاین: تصادفی و در گزارش ذخیره می‌شود.
+   آنلاین (بعداً): سرور همین عدد را می‌دهد و بعداً نتیجه را بازتولید می‌کند. */
+let _matchSeq = 0;
+function newMatchSeed(){
+  _matchSeq++;
+  const rand = Math.floor(Math.random() * 0x7FFFFFFF);
+  return (engineHash('m' + _matchSeq + ':' + rand + ':' + Date.now()) >>> 0);
+}
+/* شبیه‌سازی مسابقه با موتور قطعی (engine.js).
+   خروجی یک «گزارش کامل» است: نتیجه + رویدادها + آمار + عوامل مؤثر + seed.
+   نکته‌ی آنلاین: همین تابع روی سرور هم اجرا می‌شود؛ کافی است همان seed و
+   همان ترکیب داده شود تا نتیجه دقیقاً بازتولید شود. */
 function simulateMatch(homeName, awayName, opts){
   const o = opts || {};
-  const homeAdv = o.neutral ? 0 : 6;
-  let h, a;
-  if(homeName===state.clubName) h = teamStrengthFor(state.players, state.starters); else h = rivalStrength(homeName);
-  if(awayName===state.clubName) a = teamStrengthFor(state.players, state.starters); else a = rivalStrength(awayName);
-  const homeExpected = clamp(0.6 + (h.atk + homeAdv - a.def)/28, 0.15, 4.2);
-  const awayExpected = clamp(0.6 + (a.atk - h.def)/28, 0.15, 4.2);
+  const seed = (o.seed === undefined || o.seed === null) ? newMatchSeed() : o.seed;
+  const homeSide = buildEngineSide(homeName, homeName===state.clubName, seed);
+  const awaySide = buildEngineSide(awayName, awayName===state.clubName, seed);
+  const report = simulateMatchEngine(homeSide, awaySide, { seed, neutral: !!o.neutral });
+  /* ورودی‌های موتور را هم ذخیره می‌کنیم تا نتیجه دقیقاً بازتولیدشدنی باشد.
+     (در آنلاین، سرور همین را نگه می‌دارد و روی کلاینت تأیید می‌کند) */
+  report.inputs = { home: compactSide(homeSide), away: compactSide(awaySide) };
+  report.id = o.id || ('m' + seed.toString(36));
+  report.competition = o.competition || 'league';
+  report.season = state.season;
+  report.week = state.week;
+  return report;
+}
+/* فقط داده‌هایی که موتور واقعاً می‌خواند (برای بازتولید و کوچک ماندن سیو) */
+function compactSide(side){
   return {
-    home:homeName, away:awayName,
-    homeGoals: poisson(homeExpected), awayGoals: poisson(awayExpected),
-    neutral: !!o.neutral,
-    homeStrength: (h.atk+h.def)/2, awayStrength: (a.atk+a.def)/2
+    name: side.name, atk: side.atk, def: side.def,
+    fitness: side.fitness, stamina: side.stamina, morale: side.morale,
+    players: (side.players||[]).map(p=>({ id:p.id, name:p.name, pos:p.pos, attack:p.attack }))
   };
+}
+
+/* کدام طرف گزارش، تیم کاربر است؟ */
+function userSideOf(report){
+  if(report.home === state.clubName) return 'home';
+  if(report.away === state.clubName) return 'away';
+  return null;
+}
+/* ذخیره‌ی گزارش برای ری‌پلی و مرور بعدی */
+const MAX_REPORTS = 10;
+function pushReport(report){
+  if(!state.matchReports) state.matchReports = [];
+  state.matchReports.unshift(report);
+  if(state.matchReports.length > MAX_REPORTS) state.matchReports.length = MAX_REPORTS;
+  state.lastReportId = report.id;
+  return report;
 }
 /* ضربات پنالتی: تیمی که قدرت بیشتری دارد شانس تبدیل بالاتری می‌گیرد */
 function shootout(userStrength, oppStrength){
@@ -101,25 +184,47 @@ function applyResultToTable(res){
   else if(res.homeGoals<res.awayGoals){ away.won++; away.pts+=3; home.lost++; updateForm(away,3); updateForm(home,0); }
   else { home.draw++; away.draw++; home.pts++; away.pts++; updateForm(home,1); updateForm(away,1); }
 }
-function attributeGoals(count){
-  const starters = state.players.filter(p=>state.starters.includes(p.id));
-  const pool = [];
-  starters.forEach(p=>{
-    let w = p.position==='FW'?4:(p.position==='MF'?2:(p.position==='DF'?0.4:0));
-    w *= (p.attack/70);
-    for(let i=0;i<Math.round(w*10);i++) pool.push(p.id);
+/* آمار فصل از روی رویدادهای موتور پر می‌شود (به‌جای قرعه‌کشی جداگانه).
+   مزیت: آمار و گزارش مسابقه همیشه با هم هم‌خوان‌اند — هم آفلاین، هم آنلاین. */
+function applyReportToStats(report, opts){
+  const countStats = !(opts && opts.countStats === false);
+  const side = userSideOf(report);
+  if(!side) return;
+  const myGoals = side === 'home' ? report.homeGoals : report.awayGoals;
+  const oppGoals = side === 'home' ? report.awayGoals : report.homeGoals;
+  report.events.forEach(e=>{
+    if(e.side !== side) return;
+    if(countStats && e.type === 'goal' && e.playerId){
+      state.seasonStats.goals[e.playerId] = (state.seasonStats.goals[e.playerId]||0) + 1;
+      if(e.assistId) state.seasonStats.assists[e.assistId] = (state.seasonStats.assists[e.assistId]||0) + 1;
+    }
+    if(e.type === 'knock' && e.playerId){
+      const p = state.players.find(x=>x.id===e.playerId);
+      if(p) p.fitness = clamp(p.fitness - rnd(3,9), 20, 100);
+    }
   });
-  const scorers=[];
-  for(let i=0;i<count;i++){ if(pool.length===0) break; scorers.push(pick(pool)); }
-  return scorers;
+  if(countStats && oppGoals === 0 && myGoals > 0){
+    const gk = state.players.find(p=>p.position==='GK' && state.starters.includes(p.id));
+    if(gk) state.seasonStats.cleanSheets[gk.id] = (state.seasonStats.cleanSheets[gk.id]||0) + 1;
+  }
+  return {myGoals, oppGoals};
 }
-function attributeAssist(scorerId){
-  if(Math.random()<0.2) return null;
-  const starters = state.players.filter(p=>state.starters.includes(p.id) && p.id!==scorerId);
-  const pool=[];
-  starters.forEach(p=>{ let w = p.position==='MF'?4:(p.position==='FW'?2:(p.position==='DF'?1:0)); w*=(p.attack/70); for(let i=0;i<Math.round(w*10);i++) pool.push(p.id); });
-  if(pool.length===0) return null;
-  return pick(pool);
+/* خلاصه‌ی خوانا از یک رویداد (برای نمایش در گزارش) */
+function eventText(e, report){
+  const isUserHome = report.home === state.clubName;
+  const own = (e.side === 'home') === isUserHome;
+  const who = e.playerName || '—';
+  switch(e.type){
+    case 'goal': return { icon:'⚽', text:`${who} گل زد${e.assistName?` (پاس: ${e.assistName})`:''}`, own };
+    case 'save': return { icon:'🧤', text:`شوت ${who} را دروازه‌بان گرفت`, own };
+    case 'miss': return { icon:'↗️', text:`شوت ${who} بیرون رفت`, own };
+    case 'card': return { icon: e.card === 'r' ? '🟥' : '🟨', text:`کارت ${e.card === 'r' ? 'قرمز' : 'زرد'} برای ${who}`, own };
+    case 'knock': return { icon:'➕', text:`${who} ضربه خورد ولی ادامه داد`, own };
+    case 'halftime': return { icon:'⏸️', text:`پایان نیمه‌ی اول`, own:null };
+    case 'fulltime': return { icon:'🏁', text:`پایان مسابقه`, own:null };
+    case 'kickoff': return { icon:'▶️', text:`شروع مسابقه`, own:null };
+    default: return { icon:'•', text:'', own:null };
+  }
 }
 function applyTraining(){
   const plan = state.trainingPlan;
@@ -166,7 +271,7 @@ function resolveCupIfDue(){
   const isHome = isFinal ? false : Math.random() < 0.5;
   const home = isHome ? state.clubName : opponent.name;
   const away = isHome ? opponent.name : state.clubName;
-  const res = simulateMatch(home, away, {neutral});
+  const res = simulateMatch(home, away, {neutral, competition:'cup'});
   const myGoals = isHome ? res.homeGoals : res.awayGoals;
   const oppGoals = isHome ? res.awayGoals : res.homeGoals;
   const venue = neutral ? 'زمین بی‌طرف' : (isHome ? 'میزبان' : 'میهمان');
@@ -178,7 +283,8 @@ function resolveCupIfDue(){
     detail += ' · کار به پنالتی کشید';
   } else won = myGoals > oppGoals;
   const score = `${myGoals}-${oppGoals}${penTxt}`;
-  cup.log.push({stage:cup.stage, opponent:opponent.name, score, won, pens:!!penTxt, atHome:isHome, neutral});
+  cup.log.push({stage:cup.stage, opponent:opponent.name, score, won, pens:!!penTxt, atHome:isHome, neutral, reportId: res.id});
+  pushReport(res);
   if(won){
     addNews(`${CUP_STAGE_LABELS[cup.stage]}: مقابل ${opponent.name} با نتیجه ${score} بردی.`, 'match');
     if(cup.stage==='ro8') cup.stage='semi';
@@ -196,7 +302,7 @@ function resolveCupIfDue(){
     } else addNews(`از جام حذفی مقابل ${opponent.name} با نتیجه ${score} حذف شدی.`, 'match');
     cup.stage='out'; cup.active=false;
   }
-  return {opponent:opponent.name, score, won, stageKey:playedStage, champion: cup.stage==='champion'};
+  return {opponent:opponent.name, score, won, stageKey:playedStage, champion: cup.stage==='champion', reportId: res.id};
 }
 
 function weeklySponsorship(){
@@ -246,16 +352,8 @@ function playWeek(){
     const oppGoals = wasHome?userResult.awayGoals:userResult.homeGoals;
     const opp = wasHome?userResult.away:userResult.home;
     const outcome = myGoals>oppGoals?"برد":(myGoals<oppGoals?"باخت":"مساوی");
-    const scorers = attributeGoals(myGoals);
-    scorers.forEach(sid=>{
-      state.seasonStats.goals[sid] = (state.seasonStats.goals[sid]||0)+1;
-      const aid = attributeAssist(sid);
-      if(aid) state.seasonStats.assists[aid] = (state.seasonStats.assists[aid]||0)+1;
-    });
-    if(oppGoals===0){
-      const gk = state.players.find(p=>p.position==='GK' && state.starters.includes(p.id));
-      if(gk) state.seasonStats.cleanSheets[gk.id] = (state.seasonStats.cleanSheets[gk.id]||0)+1;
-    }
+    applyReportToStats(userResult);
+    pushReport(userResult);
     addNews(`نتیجه بازی مقابل ${opp}: ${userResult.homeGoals} - ${userResult.awayGoals} (${outcome}).`, "match");
     state.players.filter(p=>state.starters.includes(p.id)).forEach(p=>{
       p.morale = clamp(p.morale + (outcome==="برد"?4:(outcome==="باخت"?-4:0)), 20, 100);
@@ -271,6 +369,7 @@ function playWeek(){
   if(userResult || cupRes) showMatchModal(userResult, cupRes);
 }
 function showMatchModal(res, cupRes){
+  const reportId = (res && res.id) || (cupRes && cupRes.reportId) || '';
   const parts = [];
   let anyWin = false;
   if(res){
@@ -306,7 +405,10 @@ function showMatchModal(res, cupRes){
       <div class="modal glass" onclick="event.stopPropagation()">
         ${anyWin ? `<div class="confetti-wrap">${confettiHtml(24)}</div>` : ''}
         ${parts.join('')}
-        <button class="btn primary" style="width:100%; margin-top:14px;" onclick="closeOverlay('matchModal')">ادامه</button>
+        <div style="display:flex; gap:8px; margin-top:14px;">
+          ${reportId ? `<button class="btn ghost" style="flex:1;" onclick="closeOverlay('matchModal'); openReport('${reportId}')">گزارش کامل 📋</button>` : ''}
+          <button class="btn primary" style="flex:1;" onclick="closeOverlay('matchModal')">ادامه</button>
+        </div>
       </div>
     </div>`;
 }

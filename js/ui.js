@@ -28,6 +28,7 @@ function render(){
   else if(uiMain==="league" && uiSub==="table") c.innerHTML = renderLeagueTable();
   else if(uiMain==="league" && uiSub==="cup") c.innerHTML = renderCup();
   else if(uiMain==="league" && uiSub==="stats") c.innerHTML = renderSeasonStats();
+  else if(uiMain==="league" && uiSub==="reports") c.innerHTML = renderReports();
   else if(uiMain==="league" && uiSub==="news") c.innerHTML = renderNews();
   else if(uiMain==="settings" && uiSub==="club") c.innerHTML = renderClubFacilities();
   else if(uiMain==="settings" && uiSub==="achievements") c.innerHTML = renderAchievements();
@@ -79,6 +80,8 @@ function renderDashboard(){
     <p class="muted" style="font-size:0.78rem;">هر هفته یه بار می‌تونی بچرخونی و جایزه نقدی رایگان ببری.</p>
     <button class="btn ghost" style="width:100%;" onclick="spinLucky()" ${state.lastLuckyWeek===state.week?'disabled':''}>${state.lastLuckyWeek===state.week?'این هفته چرخوندی ✓':'چرخوندن 🎡'}</button>
   </div>
+  ${lastReportCardHtml()}
+  ${challengeCardHtml()}
   <div class="card glass">
     <h2><span class="dot"></span>آخرین اخبار</h2>
     ${state.news.slice(0,3).map(n=>`<div class="news-item"><span>${n.tag==='match'?'⚽':n.tag==='transfer'?'💰':'📰'}</span><span>${n.msg}</span></div>`).join('') || '<div class="empty">خبری نیست</div>'}

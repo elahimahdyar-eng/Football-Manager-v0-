@@ -79,3 +79,27 @@ function sanitizeName(str, fallback, maxLen){
   return s || fallback;
 }
 function avgOf(arr, fn){ return arr.length ? arr.reduce((s,x)=>s+fn(x),0)/arr.length : 0; }
+
+/* ================= base64-url (برای «کد چالش» و اشتراک‌گذاری) ================= */
+function b64urlEncode(str){
+  const bytes = new TextEncoder().encode(String(str));
+  let bin = '';
+  bytes.forEach(b=>{ bin += String.fromCharCode(b); });
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function b64urlDecode(code){
+  const b64 = String(code).trim().replace(/-/g,'+').replace(/_/g,'/');
+  const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
+  const bin = atob(b64 + pad);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function copyTextToClipboard(txt, okMsg){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(
+      ()=>showToast(okMsg || 'کپی شد ✅', 'success'),
+      ()=>showToast('کپی خودکار نشد؛ دستی انتخاب کن.')
+    );
+  } else showToast('مرورگر از کپی خودکار پشتیبانی نمی‌کند.');
+}

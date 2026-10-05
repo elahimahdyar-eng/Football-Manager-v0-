@@ -61,6 +61,17 @@ function normalizeState(s){
   if(!FORMATIONS[s.formation]) s.formation = "4-4-2";
   if(!STYLES[s.style]) s.style = "balanced";
   if(!Array.isArray(s.news)) s.news = [];
+  if(!Array.isArray(s.matchReports)) s.matchReports = [];
+  /* گزارش‌های خیلی سنگین قدیمی را دور بریز (نگه‌داشتن اطلاعات حیاتی) */
+  s.matchReports = s.matchReports
+    .filter(r=>r && r.events && r.stats)
+    .slice(0, MAX_REPORTS)
+    .map(r=>{
+      if(!r.inputs){ r.inputs = null; }      /* گزارش‌های قبل از نسخه‌ی موتور: بدون تأییدپذیری */
+      if(r.engineVersion === undefined) r.engineVersion = 0;
+      return r;
+    });
+  if(s.lastReportId === undefined) s.lastReportId = s.matchReports[0] ? s.matchReports[0].id : null;
   if(!Array.isArray(s.transferMarket) || !s.transferMarket.length) s.transferMarket = genMarket();
 
   /* آمار نامعتبر بازیکن‌ها را ترمیم کن */

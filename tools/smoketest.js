@@ -85,7 +85,8 @@ const sandbox = {
   navigator: {}, location: { href: 'http://localhost/' },
   setTimeout: () => 0, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {},
   alert: () => {}, confirm: () => true,
-  JSON, Math, Date, Object, Array, String, Number, Boolean, RegExp, Error, Set, Map, Promise, isNaN, parseInt, parseFloat
+  JSON, Math, Date, Object, Array, String, Number, Boolean, RegExp, Error, Set, Map, Promise, isNaN, parseInt, parseFloat,
+  TextEncoder, TextDecoder, btoa, atob, Uint8Array
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
@@ -196,10 +197,12 @@ check('بازی دادن بازیکن خارج از پست تیم را ضعیف�
 run('autoFillLineup()');
 
 console.log('\n=== ۷) ضربات پنالتی در جام حذفی ===');
-const pens = run(`(()=>{let u=0,o=0;for(let i=0;i<200;i++){const r=shootout(75,75);if(r.userWon)u++;o++;}  
-  const a=shootout(75,75); const b=shootout(75,75);
-  return {wins:u,total:o,alwaysDecisive: shootout(75,75).userScore!==shootout(75,75).oppScore, balanced: u/Math.max(1,o)};})()`);
-check('پنالتی همیشه برنده دارد', pens.alwaysDecisive === true);
+const pens = run(`(()=>{
+  let decisive = 0;
+  for(let i=0;i<500;i++){ const r = shootout(75,75); if(r.userScore !== r.oppScore) decisive++; }
+  return { decisive, alwaysDecisive: decisive === 500 };
+})()`);
+check('پنالتی همیشه برنده دارد (۵۰۰ آزمون)', pens.alwaysDecisive === true, `${pens.decisive}/500`);
 check('تیم ضعیف‌تر شانس کمتری دارد', run(`(()=>{let w=0;for(let i=0;i<300;i++) if(shootout(60,85).userWon) w++; return w/300;})()`) < 0.5);
 check('تیم مساوی تقریباً ۵۰-۵۰ است', Math.abs(run(`(()=>{let w=0;for(let i=0;i<400;i++) if(shootout(70,70).userWon) w++; return w/400;})()`) - 0.5) < 0.12);
 
@@ -212,7 +215,80 @@ check('بارگذاری خودکار بازی را برمی‌گرداند', run
 run('startNewGame(false)');
 check('شروع بازی جدید، ذخیره‌ی قبلی را پاک می‌کند', !localStorage.getItem('footballManager.autosave.v1') && run('state===null'));
 
-console.log('\n=== ۹) رندر همه‌ی تب‌ها ===');
+console.log('\n=== ۹) موتور مسابقه، گزارش و ری‌پلی ===');
+run(`document.getElementById('inpClub').value='تیم تست'; document.getElementById('inpManager').value='مدیر'; startGame()`);
+run('autoFillLineup()');
+const rep1 = run(`simulateMatch(state.clubName, state.league.teams[1].name, {seed: 4242, competition:'league'})`);
+check('simulateMatch گزارش کامل برمی‌گرداند', !!(rep1 && rep1.events && rep1.stats && rep1.factors), Object.keys(rep1||{}).slice(0,6).join(','));
+check('گزارش، ورودی‌های بازتولیدشدنی دارد', !!(rep1.inputs && rep1.inputs.home && rep1.inputs.away));
+check('گزارش، نسخه‌ی موتور را دارد', rep1.engineVersion === 1);
+check('گزارش، seed داده‌شده را نگه می‌دارد', rep1.seed === 4242);
+const rep2 = run(`JSON.stringify(simulateMatch(state.clubName, state.league.teams[1].name, {seed: 4242}))`);
+const rep1j = JSON.stringify(rep1);
+check('همان seed ⇒ همان گزارش (قطعی بودن در بازی)', rep1j === rep2 || rep1j.split('"id"')[0] === rep2.split('"id"')[0]);
+const verify = run(`(()=>{const r=state.matchReports[0]||null; return r?null:null})()`);
+run(`pushReport(${JSON.stringify({}).length ? 'JSON.parse(' + JSON.stringify(rep1j) + ')' : 'null'})`);
+check('گزارش در فهرست گزارش‌ها ذخیره شد', run('state.matchReports.length') >= 1);
+const same = run(`(()=>{const r = state.matchReports[0];
+  const again = simulateMatchEngine(r.inputs.home, r.inputs.away, {seed:r.seed, neutral:r.neutral});
+  return again.homeGoals===r.homeGoals && again.awayGoals===r.awayGoals && JSON.stringify(again.events)===JSON.stringify(r.events);})()`);
+check('بازتولید گزارش از روی seed نتیجه‌ی یکسان می‌دهد (ضدتقلب)', same === true);
+
+console.log('\n=== ۱۰) آمار فصل از روی گزارش ===');
+run('state.seasonStats = freshSeasonStats()');
+const statsOk = run(`(()=>{
+  const before = JSON.stringify(state.seasonStats);
+  const r = simulateMatch(state.clubName, state.league.teams[2].name, {seed: 99});
+  applyReportToStats(r);
+  const side = userSideOf(r);
+  const goalsInEvents = r.events.filter(e=>e.side===side && e.type==='goal').length;
+  const myGoals = side==='home'? r.homeGoals : r.awayGoals;
+  const sum = Object.values(state.seasonStats.goals).reduce((a,b)=>a+b,0);
+  return {goalsInEvents, myGoals, sum, changed: JSON.stringify(state.seasonStats) !== before};
+})()`);
+check('گل‌های آمار فصل با رویدادهای گزارش برابر است', statsOk.sum === statsOk.myGoals, `آمار=${statsOk.sum} گزارش=${statsOk.myGoals}`);
+check('آمار فصل واقعاً به‌روز شد', statsOk.changed === true);
+
+console.log('\n=== ۱۱) کد چالش (بازی دوستانه‌ی آسنکرون) ===');
+const codeA = run('makeChallengeCode()');
+check('کد چالش ساخته شد', typeof codeA === 'string' && codeA.length > 40, (codeA||'').length + ' کاراکتر');
+check('کد چالش خودش را برمی‌گرداند', run(`decodeChallengeCode(${JSON.stringify(codeA)})`) !== null);
+check('کد نامعتبر رد می‌شود', run(`decodeChallengeCode('!!!bad!!!')`) === null);
+const twoClients = run(`(()=>{
+  const A = makeChallengeCode();
+  const B = makeChallengeCode();
+  const r1 = playChallenge(A, B);
+  const r2 = playChallenge(B, A);   // طرف مقابل، کدها را برعکس می‌گذارد
+  return { ok: !!r1 && !!r2, same: r1 && r2 ? (r1.homeGoals===r2.homeGoals && r1.awayGoals===r2.awayGoals && r1.home===r2.home) : false,
+           neutral: r1 ? r1.neutral : null };
+})()`);
+check('بازی دوستانه در دو دستگاه، نتیجه‌ی یکسان می‌دهد', twoClients.same === true);
+check('زمین دوستانه بی‌طرف است (برابری کامل)', twoClients.neutral === true);
+const selfChallenge = run(`(()=>{const A = makeChallengeCode(); const r = playChallenge(A, A); return r ? (r.homeGoals>=0 && r.awayGoals>=0) : false})()`);
+check('چالش با خودت هم خطا نمی‌دهد', selfChallenge === true);
+run(`commitFriendly(playChallenge(makeChallengeCode(), makeChallengeCode()))`);
+check('بازی دوستانه در گزارش‌ها ثبت شد', run(`state.matchReports.filter(r=>r.competition==='friendly').length`) >= 1);
+
+console.log('\n=== ۱۲) رندر مودال‌های گزارش و چالش ===');
+let modalOk = true, modalErr = '';
+try{ run(`openReport(state.matchReports[0].id)`); }catch(e){ modalOk = false; modalErr = e.message; }
+check('مودال گزارش کامل بدون خطا باز می‌شود', modalOk, modalErr);
+modalOk = true; modalErr = '';
+try{ run(`verifyReport(state.matchReports[0].id)`); }catch(e){ modalOk = false; modalErr = e.message; }
+check('مودال تأیید نتیجه بدون خطا باز می‌شود', modalOk, modalErr);
+modalOk = true; modalErr = '';
+try{ run(`closeAllOverlays(); openChallenge()`); }catch(e){ modalOk = false; modalErr = e.message; }
+check('مودال کد چالش بدون خطا باز می‌شود', modalOk, modalErr);
+modalOk = true; modalErr = '';
+try{ run(`closeAllOverlays(); renderReports()`); }catch(e){ modalOk = false; modalErr = e.message; }
+check('فهرست گزارش‌ها بدون خطا رندر می‌شود', modalOk, modalErr);
+check('گزارش‌ها شامل نام بازیکن‌های واقعی حریف هستند',
+  run(`(()=>{const r=(state.matchReports||[]).find(x=>x.away!==state.clubName||x.home!==state.clubName); if(!r) return false;
+    const side = r.home===state.clubName?'away':'home';
+    const e = r.events.find(ev=>ev.side===side && ev.playerName);
+    return !!e && e.playerName.length>2;})()`) === true);
+
+console.log('\n=== ۱۳) رندر همه‌ی تب‌ها ===');
 run(`startGame()`);
 const NAV = run('NAV');
 let renders = 0;
