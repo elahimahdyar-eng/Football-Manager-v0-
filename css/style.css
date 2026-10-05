@@ -202,3 +202,73 @@
 .tl-goal-against{ background:rgba(244,97,79,0.08); border-radius:10px; }
 .tl-card{ background:rgba(251,191,36,0.08); border-radius:10px; }
 .tl-mid{ background:rgba(255,255,255,0.05); border-radius:10px; font-weight:700; }
+
+/* ===== فرم ۵ بازی آخر ===== */
+.form-strip{ display:inline-flex; gap:2px; align-items:center; vertical-align:middle; }
+.form-strip i{ width:16px; height:16px; border-radius:5px; display:inline-flex; align-items:center; justify-content:center;
+  font-size:0.55rem; font-weight:800; font-style:normal; line-height:1; }
+.form-strip i.fg-w{ background:rgba(52,211,153,0.85); color:#04141a; }
+.form-strip i.fg-d{ background:rgba(251,191,36,0.85); color:#2a1c00; }
+.form-strip i.fg-l{ background:rgba(244,97,79,0.8); color:#fff; }
+
+/* ===== چیدمان‌های ذخیره‌شده ===== */
+.preset-row{ display:flex; align-items:center; gap:6px; padding:9px 0; border-bottom:1px solid var(--glass-border); }
+.preset-row:last-of-type{ border-bottom:none; }
+.preset-row .btn{ flex:0 0 auto; }
+.grid4{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+
+/* ===== پخش زنده‌ی مسابقه ===== */
+.live-modal{ max-width:480px; padding:16px; overflow:hidden; }
+.live-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+.live-comp{ font-size:0.7rem; color:var(--muted); }
+.live-badge{ font-size:0.66rem; font-weight:800; background:rgba(244,97,79,0.18); color:#ffb3a7;
+  border:1px solid rgba(244,97,79,0.35); padding:3px 9px; border-radius:999px; }
+.live-badge.ended{ background:rgba(52,211,153,0.16); color:#a7f3d4; border-color:rgba(52,211,153,0.35); }
+
+.live-score{ display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 0 10px; }
+.ls-team{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; font-size:0.72rem; font-weight:700; text-align:center; min-width:0; }
+.ls-team span{ max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ls-mid{ display:flex; flex-direction:column; align-items:center; gap:2px; }
+.ls-num{ font-size:1.9rem; font-weight:800; letter-spacing:1px; background:var(--grad-brand);
+  -webkit-background-clip:text; background-clip:text; color:transparent; white-space:nowrap; }
+.ls-clock{ font-size:0.78rem; color:var(--amber); font-weight:800; font-variant-numeric:tabular-nums; }
+
+.live-momentum{ display:flex; height:6px; border-radius:4px; overflow:hidden; background:rgba(255,255,255,0.07); margin-bottom:12px; }
+.live-momentum .lm-home{ background:var(--grad-brand); transition:width .35s ease; }
+.live-momentum .lm-away{ background:linear-gradient(90deg,#f4614f,#fbbf24); transition:width .35s ease; }
+
+.live-stats{ margin-bottom:10px; }
+.ls-row{ display:grid; grid-template-columns:26px 1fr 26px; align-items:center; gap:6px; margin-bottom:3px; }
+.ls-row b{ font-size:0.72rem; text-align:center; }
+.ls-bar{ height:6px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden; }
+.ls-bar span{ display:block; height:100%; background:var(--grad-brand); transition:width .3s ease; }
+.ls-lbl{ grid-column:1 / -1; text-align:center; font-size:0.6rem; color:var(--muted); margin-top:-1px; }
+.ls-best{ text-align:center; font-size:0.72rem; margin-top:6px; }
+
+.live-feed{ max-height:170px; overflow-y:auto; display:flex; flex-direction:column; gap:3px; padding-inline-end:3px; }
+.lf-item{ display:flex; align-items:center; gap:6px; font-size:0.76rem; padding:5px 7px; border-radius:9px; background:rgba(255,255,255,0.03); }
+.lf-min{ min-width:26px; color:var(--muted); font-size:0.64rem; font-variant-numeric:tabular-nums; }
+.lf-ic{ font-size:0.85rem; }
+.lf-tx{ flex:1; min-width:0; }
+.lf-goal{ background:rgba(52,211,153,0.16); font-weight:700; }
+.lf-goal-against{ background:rgba(244,97,79,0.12); }
+.lf-card{ background:rgba(251,191,36,0.12); }
+.lf-save{ background:rgba(56,189,248,0.09); }
+.lf-mid{ justify-content:center; background:rgba(255,255,255,0.06); font-weight:700; }
+.lf-result{ justify-content:center; font-size:0.9rem; margin-bottom:4px; }
+.lf-result.win{ background:rgba(52,211,153,0.2); }
+.lf-result.draw{ background:rgba(251,191,36,0.16); }
+.lf-result.loss{ background:rgba(244,97,79,0.16); }
+.lf-new{ animation: lfIn .35s cubic-bezier(.34,1.56,.64,1); }
+@keyframes lfIn{ from{ opacity:0; transform:translateY(-8px) scale(.97); } to{ opacity:1; transform:none; } }
+
+.live-controls{ display:flex; align-items:center; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.lc-btn{ border:1px solid var(--glass-border); background:var(--glass-strong); color:var(--text);
+  border-radius:10px; padding:7px 11px; font-family:var(--font); font-size:0.74rem; cursor:pointer; }
+.lc-btn:hover{ filter:brightness(1.15); }
+.lc-btn:disabled{ opacity:0.4; cursor:not-allowed; }
+.lc-speeds{ display:flex; gap:2px; background:rgba(255,255,255,0.05); border-radius:10px; padding:2px; }
+.lc-sp{ border:none; background:transparent; color:var(--muted); font-family:var(--font); font-size:0.72rem;
+  padding:5px 8px; border-radius:8px; cursor:pointer; }
+.lc-sp.on{ background:var(--grad-brand); color:#04141a; font-weight:800; }
+.live-modal .confetti-wrap{ position:absolute; inset:0; }

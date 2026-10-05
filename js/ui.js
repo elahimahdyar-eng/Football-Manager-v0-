@@ -16,6 +16,8 @@ function render(){
   document.getElementById('hdrAvgOv').textContent = Math.round(state.players.reduce((s,p)=>s+overallOf(p),0)/state.players.length);
   document.getElementById('hdrMorale').textContent = Math.round(state.players.reduce((s,p)=>s+p.morale,0)/state.players.length) + '%';
   document.getElementById('hdrProgress').style.width = Math.min(100, Math.round((state.week-1)/state.league.fixtures.length*100)) + '%';
+  const formHost = document.getElementById('hdrForm');
+  if(formHost) formHost.innerHTML = formStripHTML(userLast5());
 
   const c = document.getElementById('tabContent');
   if(uiMain==="home") c.innerHTML = renderDashboard();
@@ -32,12 +34,76 @@ function render(){
   else if(uiMain==="league" && uiSub==="news") c.innerHTML = renderNews();
   else if(uiMain==="settings" && uiSub==="club") c.innerHTML = renderClubFacilities();
   else if(uiMain==="settings" && uiSub==="achievements") c.innerHTML = renderAchievements();
+  else if(uiMain==="settings" && uiSub==="prefs") c.innerHTML = renderPrefs();
   else if(uiMain==="settings" && uiSub==="save") c.innerHTML = renderSave();
   else if(uiMain==="settings" && uiSub==="load") c.innerHTML = renderLoad();
 
   /* ذخیره‌ی خودکار: هر تغییری در بازی از این مسیر می‌گذرد */
   saveGame();
 }
+/* ---------- فرم ۵ بازی آخر (مثل بازی‌های مدیریتی حرفه‌ای) ---------- */
+function teamLast5(name){
+  const t = state.league.teams.find(x=>x.name===name);
+  return t ? (t.last5 || []) : [];
+}
+function userLast5(){
+  const t = state.league.teams.find(x=>x.isUser);
+  return t ? (t.last5 || []) : [];
+}
+function formStripHTML(arr){
+  if(!arr || !arr.length) return '';
+  return `<span class="form-strip">${arr.map(pts=>{
+    const cls = pts === 3 ? 'fg-w' : (pts === 1 ? 'fg-d' : 'fg-l');
+    const ch  = pts === 3 ? 'ب' : (pts === 1 ? 'م' : 'ش');
+    return `<i class="${cls}" title="${pts === 3 ? 'برد' : (pts === 1 ? 'مساوی' : 'باخت')}">${ch}</i>`;
+  }).join('')}</span>`;
+}
+
+/* ---------- تنظیمات ---------- */
+function renderPrefs(){
+  const p = state.prefs || {};
+  return `
+  <div class="card glass">
+    <h2><span class="dot"></span>نمایش مسابقه${infoBtn('prefs')}</h2>
+    <p class="muted" style="font-size:0.78rem; line-height:1.8;">مسابقه‌ی تیمت را می‌توانی دقیقه‌به‌دقیقه و با سرعت دلخواه ببینی — یا مستقیم نتیجه را ببینی.</p>
+    <div class="row"><span>پخش زنده‌ی مسابقه</span><b>${p.liveView !== false ? 'روشن ✅' : 'خاموش'}</b></div>
+    <div class="grid2" style="margin-top:8px;">
+      <div class="formation-opt ${p.liveView !== false ? 'active' : ''}" onclick="setPref('liveView', true)">پخش زنده</div>
+      <div class="formation-opt ${p.liveView === false ? 'active' : ''}" onclick="setPref('liveView', false)">نمایش نتیجه</div>
+    </div>
+    <div class="muted" style="font-size:0.72rem; margin-top:12px;">سرعت پخش پیش‌فرض</div>
+    <div class="grid4" style="margin-top:6px;">
+      ${Object.keys(LIVE_SPEEDS).map(k=>`<div class="formation-opt ${((p.liveSpeed)||'normal')===k?'active':''}" onclick="setLiveSpeedPref('${k}')">${LIVE_SPEED_LABELS[k]}</div>`).join('')}
+    </div>
+  </div>
+  <div class="card glass">
+    <h2><span class="dot"></span>چیدمان‌های ذخیره‌شده</h2>
+    <div class="row"><span>اعمال خودکار پیش از بازی</span><b>${p.autoPresets !== false ? 'روشن ✅' : 'خاموش'}</b></div>
+    <div class="grid2" style="margin-top:8px;">
+      <div class="formation-opt ${p.autoPresets !== false ? 'active' : ''}" onclick="setPref('autoPresets', true)">خودکار</div>
+      <div class="formation-opt ${p.autoPresets === false ? 'active' : ''}" onclick="setPref('autoPresets', false)">دستی</div>
+    </div>
+    <p class="muted" style="font-size:0.72rem; margin-top:10px; line-height:1.8;">اگر روشن باشد، پیش از بازی لیگ چیدمان «لیگ» و پیش از بازی جام، چیدمان «جام» به‌طور خودکار اعمال می‌شود. چیدمان‌ها را در تب «تیم من ← چیدمان» ذخیره کن.</p>
+  </div>
+  <div class="card glass">
+    <h2><span class="dot"></span>اطلاعات فنی</h2>
+    <div class="row"><span>نسخه‌ی موتور مسابقه</span><b>${ENGINE_VERSION}</b></div>
+    <div class="row"><span>تعداد گزارش ذخیره‌شده</span><b>${(state.matchReports||[]).length}</b></div>
+    <div class="row"><span>فصل / هفته</span><b>${faNum(state.season)} / ${faNum(Math.min(state.week, state.league.fixtures.length))}</b></div>
+  </div>`;
+}
+function setPref(key, val){
+  if(!state.prefs) state.prefs = {};
+  state.prefs[key] = val;
+  render();
+  showToast('تنظیم ذخیره شد ✅', 'success');
+}
+function setLiveSpeedPref(k){
+  if(!state.prefs) state.prefs = {};
+  state.prefs.liveSpeed = k;
+  render();
+}
+
 function barHtml(val){ const cls = val<45?"low":(val<70?"mid":""); return `<span class="bar-wrap"><span class="bar ${cls}" style="width:${clamp(val,0,100)}%"></span></span>`; }
 
 function renderDashboard(){
@@ -67,6 +133,8 @@ function renderDashboard(){
       <div class="row"><span>آرایش تاکتیکی</span><b>${FORMATIONS[state.formation].label}</b></div>
       ${cupWeek===state.week ? `<div class="row"><span>🏆 جام حذفی</span><b>${CUP_STAGE_LABELS[cupStage]} — همین هفته</b></div>` : ''}
       <div class="row"><span>آمادگی ترکیب</span><b style="color:${avgFit<70?'#f0a08a':'var(--emerald)'};">${avgFit}٪</b></div>
+      <div class="row"><span>فرم تو</span><b>${formStripHTML(userLast5()) || '<span class="muted">بدون بازی</span>'}</b></div>
+      <div class="row"><span>فرم ${escapeHtml(oppName)}</span><b>${formStripHTML(teamLast5(oppName)) || '<span class="muted">بدون بازی</span>'}</b></div>
       ${warnings.join('')}
       <button class="btn primary" style="width:100%; margin-top:12px;" onclick="playWeek()">شبیه‌سازی هفته و بازی</button>
       ${holes>0 ? `<button class="btn ghost small" style="width:100%; margin-top:8px;" onclick="autoFillLineup(); render(); showToast('ترکیب خودکار چیده شد ✅','success');">چینش خودکار ترکیب</button>` : ''}
@@ -145,7 +213,7 @@ function openPlayerCard(pid){
           ${avatarImg(p.id,'lg',p.morale)}
           <div style="flex:1; min-width:0;">
             <div style="font-weight:800; font-size:1.05rem;">${escapeHtml(p.name)}</div>
-            <div class="muted" style="font-size:0.76rem;">${POS_FA[p.position]} · ${p.age} ساله${p.id===state.captainId?' · کاپیتان 👑':''}</div>
+            <div class="muted" style="font-size:0.76rem;">${posLabel(p)} · ${p.age} ساله${p.id===state.captainId?' · کاپیتان 👑':''}</div>
           </div>
         </div>
         ${statRow('حمله', p.attack)}
@@ -158,7 +226,8 @@ function openPlayerCard(pid){
         <div class="row"><span>پتانسیل</span><b>${p.potential}${p.potential-overallOf(p)>0?` <span class="muted">(+${p.potential-overallOf(p)})</span>`:''}</b></div>
         <div class="row"><span>ارزش / دستمزد هفتگی</span><b>${fmtMoney(p.value)} · ${fmtMoney(p.wage)}</b></div>
         ${contractLine}
-        ${posFit ? `<div class="row"><span>وضعیت در ترکیب</span><b>${POS_FA[posFit.role]}${posFit.role!==p.position?' <span style="color:var(--amber);">(خارج از پست)</span>':''}</b></div>` : ''}
+        <div class="row"><span>پست‌ها</span><b>${posLabel(p)}${positionsOf(p).length>1?' <span class="muted">(چندپسته)</span>':''}</b></div>
+        ${posFit ? `<div class="row"><span>وضعیت در ترکیب</span><b>${POS_FA[posFit.role]}${playsIn(p,posFit.role)?(p.position===posFit.role?'':' <span class="muted">(پست دوم)</span>'):' <span style="color:var(--amber);">(خارج از پست)</span>'}</b></div>` : ''}
         <button class="btn ghost" style="width:100%; margin-top:12px;" onclick="closeOverlay('genericModal')">بستن</button>
       </div>
     </div>`;
@@ -171,7 +240,7 @@ function renderLineup(){
   const filledPlayers = filledIds.map(id=>state.players.find(p=>p.id===id)).filter(Boolean);
   const avgOv = filledPlayers.length ? Math.round(avgOf(filledPlayers, p=>overallOf(p))) : 0;
   const avgFit = filledPlayers.length ? Math.round(avgOf(filledPlayers, p=>p.fitness)) : 0;
-  const outOfPos = template.filter((slot,i)=>{ const p = filledPlayers.find(x=>x.id===state.lineupSlots[i]); return p && p.position!==slot.role; });
+  const outOfPos = template.filter((slot,i)=>{ const p = filledPlayers.find(x=>x.id===state.lineupSlots[i]); return p && !playsIn(p, slot.role); });
   const benchPlayers = state.players.filter(p=>!state.lineupSlots.includes(p.id));
   return `
   <div class="card glass">
@@ -183,6 +252,7 @@ function renderLineup(){
     <div class="row"><span>میانگین امتیاز ترکیب</span><b>${avgOv||'-'}</b></div>
     <div class="row"><span>میانگین آمادگی</span><b style="color:${avgFit<70?'#f0a08a':'var(--emerald)'};">${avgFit||'-'}٪</b></div>
     <div class="row"><span>بازیکن خارج از پست</span><b>${outOfPos.length?outOfPos.length+' نفر ⚠':'هیچ'}</b></div>
+    <div class="row"><span>بازیکن چندپسته</span><b>${filledPlayers.filter(p=>positionsOf(p).length>1).length} نفر</b></div>
     ${filledIds.length<11?`<p style="color:#f0a08a; font-size:0.75rem; margin:8px 0 0;">برای شروع بازی باید هر ۱۱ جایگاه پر باشد.</p>`:''}
     <div style="display:flex; gap:8px; margin-top:10px;">
       <button class="btn ghost small" style="flex:1;" onclick="autoFillLineup(); render();">چینش خودکار</button>
@@ -217,6 +287,7 @@ function renderLineup(){
       }).join('')}
     </div>
   </div>
+  ${lineupPresetsCard()}
   <div class="card glass">
     <h2><span class="dot"></span>نیمکت (${benchPlayers.length} نفر)</h2>
     ${benchPlayers.sort((a,b)=>overallOf(b)-overallOf(a)).map(p=>playerRowHTML(p, `<button class="btn small ghost" onclick="event.stopPropagation(); addToFirstEmptySlot('${p.id}')">افزودن به زمین</button>`, {meta:`امتیاز ${overallOf(p)} · آمادگی ${p.fitness}٪`, onclick:`openPlayerCard('${p.id}')`})).join('') || '<div class="empty">همه بازیکنا توی زمین هستن</div>'}
@@ -240,7 +311,7 @@ function openPicker(slotIndex){
         ${sorted.map(p=>{
           const usedElsewhere = state.lineupSlots.includes(p.id) && p.id!==currentId;
           const fitColor = p.fitness<60?'color:#f0a08a;':'';
-          const wrongPos = p.position!==slot.role ? ' <span style="color:var(--amber);">(خارج از پست)</span>' : '';
+          const wrongPos = !playsIn(p, slot.role) ? ' <span style="color:var(--amber);">(خارج از پست)</span>' : (p.position===slot.role ? '' : ' <span class="muted">(پست دوم)</span>');
           return playerRowHTML(p, `<button class="btn small ${p.id===currentId?'ghost':'primary'}" onclick="assignToSlot(${slotIndex},'${p.id}')">${p.id===currentId?'انتخاب شده':'انتخاب'}</button>`, {meta:`امتیاز ${overallOf(p)} · <span style="${fitColor}">آمادگی ${p.fitness}٪</span>${wrongPos}${usedElsewhere?' · توی جای دیگه‌ست':''}`});
         }).join('')}
         </div>
@@ -283,6 +354,77 @@ function setFormation(key){
   state.lineupSlots = template.map(slot=>{ const arr = grouped[slot.role]; return (arr && arr.length) ? arr.shift() : null; });
   syncStartersFromLineup();
   render();
+}
+
+/* ---------- چیدمان‌های ذخیره‌شده (لیگ / جام / دوستانه) ---------- */
+const PRESET_LABELS = { league:'لیگ', cup:'جام حذفی', friendly:'دوستانه' };
+function captureLineup(){
+  return {
+    formation: state.formation,
+    slots: state.lineupSlots.slice(),
+    captainId: state.captainId,
+    style: state.style,
+    savedAt: Date.now()
+  };
+}
+function applyLineupSnapshot(snap){
+  if(!snap) return false;
+  state.formation = FORMATIONS[snap.formation] ? snap.formation : state.formation;
+  const slots = Array.isArray(snap.slots) && snap.slots.length === 11 ? snap.slots : null;
+  if(slots) state.lineupSlots = slots.map(id=>(id && state.players.some(p=>p.id===id)) ? id : null);
+  if(snap.captainId && state.players.some(p=>p.id===snap.captainId)) state.captainId = snap.captainId;
+  if(STYLES[snap.style]) state.style = snap.style;
+  syncStartersFromLineup();
+  return true;
+}
+function saveLineupPreset(key){
+  if(state.starters.length !== 11){
+    showToast('برای ذخیره‌ی چیدمان، اول باید هر ۱۱ جایگاه پر باشد.', 'error');
+    return;
+  }
+  state.lineupPresets = state.lineupPresets || {};
+  state.lineupPresets[key] = captureLineup();
+  addNews(`چیدمان «${PRESET_LABELS[key]}» ذخیره شد.`, 'info');
+  showToast(`چیدمان ${PRESET_LABELS[key]} ذخیره شد ✅`, 'success');
+  render();
+}
+function loadLineupPreset(key){
+  const snap = state.lineupPresets ? state.lineupPresets[key] : null;
+  if(!snap){ showToast(`چیدمانی برای «${PRESET_LABELS[key]}» ذخیره نکرده‌ای.`); return; }
+  applyLineupSnapshot(snap);
+  showToast(`چیدمان ${PRESET_LABELS[key]} بارگذاری شد ✅`, 'success');
+  render();
+}
+function deleteLineupPreset(key){
+  askConfirm({
+    title:'حذف چیدمان ذخیره‌شده',
+    body:`چیدمان «${PRESET_LABELS[key]}» حذف شود؟`,
+    yes:'حذف کن', danger:true,
+    onYes:()=>{ state.lineupPresets[key] = null; showToast('حذف شد'); render(); }
+  });
+}
+function lineupPresetsCard(){
+  const presets = state.lineupPresets || {};
+  const fmtWhen = ts => { try{ return new Date(ts).toLocaleDateString('fa-IR'); }catch(e){ return ''; } };
+  const current = captureLineup();
+  return `
+  <div class="card glass">
+    <h2><span class="dot"></span>چیدمان‌های ذخیره‌شده${infoBtn('presets')}</h2>
+    <p class="muted" style="font-size:0.76rem; line-height:1.8;">برای هر بستر بازی یک چیدمان ذخیره کن؛ لازم نیست هر بار از نو بچینی.</p>
+    ${['league','cup','friendly'].map(k=>{
+      const p = presets[k];
+      return `<div class="preset-row">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:0.85rem;">${PRESET_LABELS[k]}</div>
+          <div class="meta">${p ? `${FORMATIONS[p.formation].label} · ذخیره‌شده ${fmtWhen(p.savedAt)}` : '<span class="muted">ذخیره نشده</span>'}</div>
+        </div>
+        <button class="btn small primary" onclick="saveLineupPreset('${k}')">ذخیره</button>
+        <button class="btn small ghost" onclick="loadLineupPreset('${k}')" ${p?'':'disabled'}>بارگذاری</button>
+        ${p?`<button class="btn small danger" onclick="deleteLineupPreset('${k}')">حذف</button>`:''}
+      </div>`;
+    }).join('')}
+    <div class="row" style="margin-top:8px;"><span>اعمال خودکار پیش از بازی</span><b>${(state.prefs&&state.prefs.autoPresets!==false)?'روشن ✅':'خاموش'}</b></div>
+  </div>`;
 }
 
 /* ---------- Tactics tab ---------- */
@@ -380,7 +522,7 @@ function renderMarketBuy(){
   <div class="card glass">
     <h2><span class="dot"></span>بازار نقل و انتقالات${infoBtn('market')}</h2>
     <p class="muted" style="font-size:0.8rem;">بودجه فعلی: <b style="color:var(--emerald);">${fmtMoney(state.budget)}</b></p>
-    ${state.transferMarket.map(p=>playerRowHTML(p, `<div style="text-align:left;"><div style="font-weight:800; color:var(--emerald); font-size:0.8rem;">${fmtMoney(p.value)}</div><button class="btn small primary" onclick="event.stopPropagation(); buyPlayer('${p.id}')" ${state.budget<p.value?'disabled':''}>خرید</button></div>`, {meta:`${p.age} ساله · امتیاز ${overallOf(p)} · پتانسیل ${p.potential} · دستمزد ${fmtMoney(p.wage)}/هفته`, onclick:`openPlayerCard('${p.id}')`})).join('') || '<div class="empty">بازار خالیه</div>'}
+    ${state.transferMarket.map(p=>playerRowHTML(p, `<div style="text-align:left;"><div style="font-weight:800; color:var(--emerald); font-size:0.8rem;">${fmtMoney(p.value)}</div><button class="btn small primary" onclick="event.stopPropagation(); buyPlayer('${p.id}')" ${state.budget<p.value?'disabled':''}>خرید</button></div>`, {meta:`${p.age} ساله · ${posLabel(p)} · امتیاز ${overallOf(p)} · پتانسیل ${p.potential} · دستمزد ${fmtMoney(p.wage)}/هفته`, onclick:`openPlayerCard('${p.id}')`})).join('') || '<div class="empty">بازار خالیه</div>'}
     <div class="row" style="margin-top:10px;"><span>تازه‌سازی‌های این فصل</span><b>${state.marketRefreshes||0}</b></div>
     <button class="btn ghost" style="width:100%;" onclick="refreshMarket()" ${state.budget<MARKET_REFRESH_COST?'disabled':''}>تازه‌سازی بازار (${fmtMoney(MARKET_REFRESH_COST)})</button>
     <p class="muted" style="font-size:0.7rem; margin-top:6px;">هر تازه‌سازی فهرست جدیدی از بازیکنان می‌آورد و هزینه‌ی آن از بودجه کم می‌شود.</p>
@@ -411,7 +553,7 @@ function sellPlayer(id){
   const sellPrice = Math.round(p.value*0.85);
   askConfirm({
     title:'فروش بازیکن',
-    body:`${escapeHtml(p.name)} (${POS_FA[p.position]}، امتیاز ${overallOf(p)}) به قیمت <b>${fmtMoney(sellPrice)}</b> فروخته شود؟`,
+    body:`${escapeHtml(p.name)} (${posLabel(p)}، امتیاز ${overallOf(p)}) به قیمت <b>${fmtMoney(sellPrice)}</b> فروخته شود؟`,
     yes:'بله، بفروش', danger:true,
     onYes:()=>{
       state.budget += sellPrice;

@@ -11,9 +11,12 @@ function roleFitFor(playerId, slotIndex){
   const slot = getSlotTemplate(state.formation)[slotIndex];
   if(!slot) return 1;
   const p = state.players.find(x=>x.id===playerId);
-  if(!p || slot.role === p.position) return 1;
-  if(slot.role === 'GK') return 0.60;   /* دروازه‌بانی که دروازه‌بان نیست */
-  if(p.position === 'GK') return 0.70;  /* دروازه‌بان در پست میدانی */
+  if(!p) return 1;
+  const slots = positionsOf(p);
+  if(slot.role === p.position) return 1;          /* پست اصلی */
+  if(slots.includes(slot.role)) return 0.94;      /* پست دوم: جریمه‌ی خیلی کم */
+  if(slot.role === 'GK') return 0.60;             /* دروازه‌بانی که دروازه‌بان نیست */
+  if(p.position === 'GK') return 0.70;            /* دروازه‌بان در پست میدانی */
   return 0.85;
 }
 function teamStrengthFor(playersArr, starterIds){
@@ -88,7 +91,7 @@ function rivalLineup(name, strength){
 function buildEngineSide(name, isUser, seed){
   if(isUser){
     const s = teamStrengthFor(state.players, state.starters);
-    const players = s.lineup.map(p=>({ id:p.id, name:p.name, pos:p.position, attack:p.attack }));
+    const players = s.lineup.map(p=>({ id:p.id, name:p.name, pos:p.position, attack:p.attack, positions: positionsOf(p) }));
     return {
       name, atk: s.atk, def: s.def, fitness: s.fitness, stamina: s.stamina, morale: s.morale,
       players,
@@ -333,14 +336,35 @@ function playWeek(){
   }
   const avgFitness = avgOf(state.players.filter(p=>state.starters.includes(p.id)), p=>p.fitness);
   if(avgFitness < 60) showToast(`⚠ آمادگی ترکیب ${Math.round(avgFitness)}٪ است؛ تیم خسته بازی می‌کند.`);
+
+  /* چیدمان‌های ذخیره‌شده: پیش از هر بستر، چیدمان همان بستر اعمال می‌شود
+     (چیدمان فعلی کاربر در پایان هفته دقیقاً به حالت قبل برمی‌گردد) */
+  const autoPresets = !state.prefs || state.prefs.autoPresets !== false;
+  const userSnapshot = captureLineup();
+  const presets = state.lineupPresets || {};
+  let presetUsedLeague = false, presetUsedCup = false;
+  if(autoPresets && presets.league && state.starters.length === 11){
+    applyLineupSnapshot(presets.league);
+    presetUsedLeague = true;
+  }
   let userResult = null;
   round.forEach(m=>{
     const res = simulateMatch(m.home, m.away);
     applyResultToTable(res);
     if(m.home===state.clubName || m.away===state.clubName) userResult = res;
   });
+  /* بازی جام‌حذفی این هفته؟ پیش از آن چیدمان «جام» را اعمال کن */
+  const cupDue = state.cup.active && CUP_WEEKS[state.cup.stage] === state.week;
+  if(autoPresets && cupDue && presets.cup && state.starters.length === 11){
+    applyLineupSnapshot(presets.cup);
+    presetUsedCup = true;
+  }
   applyTraining();
   const cupRes = resolveCupIfDue();
+  /* بازگرداندن چیدمان کاربر */
+  if(presetUsedCup || presetUsedLeague) applyLineupSnapshot(userSnapshot);
+  if(presetUsedLeague) addNews('چیدمان ذخیره‌شده‌ی «لیگ» برای این بازی اعمال شد.', 'info');
+  if(presetUsedCup) addNews('چیدمان ذخیره‌شده‌ی «جام حذفی» برای بازی جام اعمال شد.', 'info');
   const wages = payWages();
   const sponsorship = weeklySponsorship();
   state.budget += sponsorship;
@@ -366,7 +390,14 @@ function playWeek(){
   state.week++;
   if(state.week > state.league.fixtures.length) addNews("فصل به پایان رسید!", "info");
   render();
-  if(userResult || cupRes) showMatchModal(userResult, cupRes);
+  /* اگر کاربر «پخش زنده» را روشن گذاشته باشد، مسابقه را دقیقه‌به‌دقیقه می‌بیند
+     و در پایان به خلاصه‌ی نتیجه می‌رسد. (خروجی موتور از قبل آماده است) */
+  const livePref = !state.prefs || state.prefs.liveView !== false;
+  if(livePref && userResult){
+    openLiveMatch(userResult.id, ()=>showMatchModal(userResult, cupRes));
+  } else if(userResult || cupRes){
+    showMatchModal(userResult, cupRes);
+  }
 }
 function showMatchModal(res, cupRes){
   const reportId = (res && res.id) || (cupRes && cupRes.reportId) || '';

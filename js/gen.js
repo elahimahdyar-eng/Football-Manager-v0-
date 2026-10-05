@@ -17,8 +17,15 @@ function genPlayer(position, minOv, maxOv){
   const youthBonus = age<=22 ? 1.25 : (age<=25 ? 1.1 : (age>=31 ? 0.78 : 1));
   const potentialBonus = 1 + Math.max(0, potential-overall)/45;
   const value = Math.max(4, Math.round((overall*rnd(8,16)/10) * youthBonus * potentialBonus / 2) * 2);
+  /* پست دوم: بعضی بازیکنان در دو پست بازی می‌کنند (مثل بازی‌های مدیریتی حرفه‌ای) */
+  const positions = [position];
+  const ALT_POS = { GK: [], DF: ['MF'], MF: ['DF','FW'], FW: ['MF'] };
+  if(Math.random() < 0.38){
+    const alts = ALT_POS[position] || [];
+    if(alts.length) positions.push(pick(alts));
+  }
   return {
-    id: uid(), name: pick(FIRST_NAMES)+" "+pick(LAST_NAMES), position, age,
+    id: uid(), name: pick(FIRST_NAMES)+" "+pick(LAST_NAMES), position, positions, age,
     attack, defense, pace,
     stamina: rnd(55,90), morale: rnd(60,90), fitness: rnd(80,100),
     value, wage: Math.max(1, Math.round(overall/28)),
@@ -26,6 +33,17 @@ function genPlayer(position, minOv, maxOv){
   };
 }
 function overallOf(p){ return Math.round((p.attack + p.defense + p.pace)/3); }
+/* پست‌های یک بازیکن (سازگار با ذخیره‌های قدیمی که فقط position داشتند) */
+function positionsOf(p){
+  const arr = Array.isArray(p.positions) && p.positions.length ? p.positions.slice() : [p.position];
+  if(!arr.includes(p.position)) arr.unshift(p.position);
+  return arr;
+}
+/* برچسب فارسی پست‌ها: «مدافع/هافبک» */
+function posLabel(p){
+  return positionsOf(p).map(x=>POS_FA[x] || x).join('/');
+}
+function playsIn(p, role){ return positionsOf(p).includes(role); }
 
 /* نام تیم‌های رقیب: هرگز با نام باشگاه کاربر (یا همدیگر) تکراری نمی‌شود */
 const RIVAL_FALLBACK_NAMES = [

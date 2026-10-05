@@ -61,6 +61,12 @@ function normalizeState(s){
   if(!FORMATIONS[s.formation]) s.formation = "4-4-2";
   if(!STYLES[s.style]) s.style = "balanced";
   if(!Array.isArray(s.news)) s.news = [];
+  if(!s.prefs || typeof s.prefs !== 'object') s.prefs = { liveView: true, liveSpeed: 'normal', autoPresets: true };
+  if(typeof s.prefs.liveView !== 'boolean') s.prefs.liveView = true;
+  if(!LIVE_SPEEDS[s.prefs.liveSpeed]) s.prefs.liveSpeed = 'normal';
+  if(typeof s.prefs.autoPresets !== 'boolean') s.prefs.autoPresets = true;
+  if(!s.lineupPresets || typeof s.lineupPresets !== 'object') s.lineupPresets = { league:null, cup:null, friendly:null };
+  ['league','cup','friendly'].forEach(k=>{ if(s.lineupPresets[k] && !validPreset(s.lineupPresets[k], s)) s.lineupPresets[k] = null; });
   if(!Array.isArray(s.matchReports)) s.matchReports = [];
   /* گزارش‌های خیلی سنگین قدیمی را دور بریز (نگه‌داشتن اطلاعات حیاتی) */
   s.matchReports = s.matchReports
@@ -82,6 +88,11 @@ function normalizeState(s){
     p.fitness = clamp(Math.round(p.fitness), 0, 100);
     p.morale = clamp(Math.round(p.morale), 0, 100);
     if(!POSITIONS.includes(p.position)) p.position = 'MF';
+    /* پست‌های چندگانه (ذخیره‌های قدیمی فقط position داشتند) */
+    if(!Array.isArray(p.positions) || !p.positions.length || !p.positions.every(x=>POSITIONS.includes(x))){
+      p.positions = [p.position];
+    }
+    if(!p.positions.includes(p.position)) p.positions.unshift(p.position);
   });
 
   /* تیم‌های هم‌نام: سیوهای ساخته‌شده با نسخه‌ی باگ‌دار را تعمیر می‌کند */
@@ -123,6 +134,14 @@ function normalizeState(s){
   } else s.lineupSlots = slots;
   syncStartersFromLineup();
   return true;
+}
+
+/* اعتبارسنجی چیدمان ذخیره‌شده (بعد از بارگذاری) */
+function validPreset(preset, st){
+  if(!preset || !FORMATIONS[preset.formation] || !Array.isArray(preset.slots)) return false;
+  if(preset.slots.length !== 11) return false;
+  const ids = new Set((st.players||[]).map(p=>p.id));
+  return preset.slots.every(id=>!id || ids.has(id));
 }
 
 /* ---------- بارگذاری خودکار در شروع برنامه ---------- */

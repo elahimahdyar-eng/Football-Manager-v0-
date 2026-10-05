@@ -18,7 +18,7 @@ const NAV = [
     {key:"table", label:"جدول"}, {key:"cup", label:"جام حذفی"}, {key:"stats", label:"آمار بازیکنان"}, {key:"reports", label:"گزارش‌ها"}, {key:"news", label:"اخبار"}
   ]},
   {key:"settings", label:"باشگاه", icon:"⚙️", subs:[
-    {key:"club", label:"امکانات"}, {key:"achievements", label:"دستاوردها"}, {key:"save", label:"ذخیره"}, {key:"load", label:"بارگذاری"}
+    {key:"club", label:"امکانات"}, {key:"achievements", label:"دستاوردها"}, {key:"prefs", label:"تنظیمات"}, {key:"save", label:"ذخیره"}, {key:"load", label:"بارگذاری"}
   ]}
 ];
 
@@ -72,6 +72,8 @@ function startGame(){
     trainingPlan: {sessions:['attack','physical','tactical'], intensity:'normal', focusPlayerIds:[]},
     transferMarket: genMarket(), news: [], seasonStats: freshSeasonStats(),
     matchReports: [], lastReportId: null,
+    prefs: { liveView: true, liveSpeed: 'normal', autoPresets: true },
+    lineupPresets: { league: null, cup: null, friendly: null },
     coachId: 'none', stadiumLevel: 0, recoveryCamps: 3, lastLuckyWeek: 0,
     marketRefreshes: 0,
     achievements: {leagueTitles:0, cupTitles:0, bestRank:99, seasonsPlayed:0},

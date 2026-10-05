@@ -65,6 +65,8 @@ function fmtMoney(n){
   return (v<0?'−':'') + Math.abs(v).toLocaleString('fa-IR') + " م.ت";
 }
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+/* عدد فارسی (برای شمارنده‌ها و دقیقه‌ی مسابقه) */
+function faNum(n){ return (Number(n)||0).toLocaleString('fa-IR'); }
 function poisson(lambda){ const L=Math.exp(-lambda); let k=0,p=1; do{ k++; p*=Math.random(); }while(p>L); return k-1; }
 /* جلوگیری از تزریق HTML از طریق نام باشگاه/مدیر */
 function escapeHtml(str){

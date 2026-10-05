@@ -42,6 +42,7 @@ function makeEl(id) {
     remove() {},
     querySelector() { return null; },
     querySelectorAll() { return []; },
+    insertAdjacentHTML(pos, html) { this._html = String(html) + this._html; },
     addEventListener() {},
     focus() {},
     select() {}
@@ -235,19 +236,42 @@ const same = run(`(()=>{const r = state.matchReports[0];
 check('بازتولید گزارش از روی seed نتیجه‌ی یکسان می‌دهد (ضدتقلب)', same === true);
 
 console.log('\n=== ۱۰) آمار فصل از روی گزارش ===');
-run('state.seasonStats = freshSeasonStats()');
-const statsOk = run(`(()=>{
-  const before = JSON.stringify(state.seasonStats);
-  const r = simulateMatch(state.clubName, state.league.teams[2].name, {seed: 99});
-  applyReportToStats(r);
-  const side = userSideOf(r);
-  const goalsInEvents = r.events.filter(e=>e.side===side && e.type==='goal').length;
-  const myGoals = side==='home'? r.homeGoals : r.awayGoals;
-  const sum = Object.values(state.seasonStats.goals).reduce((a,b)=>a+b,0);
-  return {goalsInEvents, myGoals, sum, changed: JSON.stringify(state.seasonStats) !== before};
+run(`state.seasonStats = freshSeasonStats();`);
+/* تست قطعی با گزارش ساختگی: گل + پاس گل + کلین‌شیت */
+const syn = run(`(()=>{
+  const scorer = state.starters[0], assister = state.starters[1];
+  const gk = state.players.find(p=>p.position==='GK' && state.starters.includes(p.id));
+  const report = {
+    home: state.clubName, away: 'تیم ساختگی', homeGoals: 1, awayGoals: 0,
+    events: [
+      { minute: 10, type: 'goal', side: 'home', playerId: scorer, assistId: assister, playerName: 'x', assistName: 'y' },
+      { minute: 60, type: 'card', side: 'away', playerName: 'z' }
+    ]
+  };
+  applyReportToStats(report);
+  return {
+    scorerGoals: state.seasonStats.goals[scorer] || 0,
+    assisterAssists: state.seasonStats.assists[assister] || 0,
+    gkClean: gk ? (state.seasonStats.cleanSheets[gk.id] || 0) : -1
+  };
 })()`);
-check('گل‌های آمار فصل با رویدادهای گزارش برابر است', statsOk.sum === statsOk.myGoals, `آمار=${statsOk.sum} گزارش=${statsOk.myGoals}`);
-check('آمار فصل واقعاً به‌روز شد', statsOk.changed === true);
+check('گل به گلزن گزارش ثبت می‌شود', syn.scorerGoals === 1, syn.scorerGoals);
+check('پاس گل به پاس‌دهنده ثبت می‌شود', syn.assisterAssists === 1, syn.assisterAssists);
+check('کلین‌شیت برای دروازه‌بان ثبت می‌شود', syn.gkClean === 1, syn.gkClean);
+/* تست دوم: از گزارش واقعی موتور، فقط وقتی گل داشته باشیم (قطعی با حلقه‌ی seed) */
+const realStats = run(`(()=>{
+  state.seasonStats = freshSeasonStats();
+  let found = null;
+  for(let i=1;i<=40;i++){
+    const r = simulateMatch(state.clubName, state.league.teams[2].name, {seed: 5000+i});
+    const side = userSideOf(r);
+    const myGoals = side==='home'? r.homeGoals : r.awayGoals;
+    if(myGoals >= 2){ applyReportToStats(r); found = {seed:r.seed, myGoals, sum:Object.values(state.seasonStats.goals).reduce((a,b)=>a+b,0)}; break; }
+  }
+  return found;
+})()`);
+check('آمار فصل از گزارش واقعی موتور پر می‌شود', !!realStats && realStats.sum === realStats.myGoals,
+  realStats ? `گل گزارش=${realStats.myGoals} آمار=${realStats.sum}` : 'گزارشی با گل پیدا نشد');
 
 console.log('\n=== ۱۱) کد چالش (بازی دوستانه‌ی آسنکرون) ===');
 const codeA = run('makeChallengeCode()');
@@ -288,7 +312,93 @@ check('گزارش‌ها شامل نام بازیکن‌های واقعی حری
     const e = r.events.find(ev=>ev.side===side && ev.playerName);
     return !!e && e.playerName.length>2;})()`) === true);
 
-console.log('\n=== ۱۳) رندر همه‌ی تب‌ها ===');
+console.log('\n=== ۱۳) پخش زنده‌ی مسابقه ===');
+run(`document.getElementById('inpClub').value='پخش'; document.getElementById('inpManager').value='مدیر'; startGame(); autoFillLineup()`);
+const liveRep = run(`simulateMatch(state.clubName, state.league.teams[3].name, {seed: 31337})`);
+run(`pushReport(${JSON.stringify({}).length ? 'JSON.parse(' + JSON.stringify(JSON.stringify(liveRep)) + ')' : 'null'})`);
+let liveOk = true, liveErr = '';
+try{ run(`openLiveMatch(state.matchReports[0].id)`); }catch(e){ liveOk = false; liveErr = e.message; }
+check('صفحه‌ی پخش زنده بدون خطا باز می‌شود', liveOk, liveErr);
+check('شمارنده‌ی دقیقه در پوسته ساخته شد', run(`document.getElementById('lvClock').textContent`) !== '');
+const cum = run(`(()=>{const r=state.matchReports[0]; const total = liveTotalMinutes(r); const c=liveCumulative(r, total);
+  return {total, goalsH:c.home.goals, goalsA:c.away.goals, shotsH:c.home.shots, shotsA:c.away.shots};})()`);
+check('آمار تجمعی تا دقیقه‌ی پایان، با نتیجه‌ی نهایی یکی است',
+  cum.goalsH === liveRep.homeGoals && cum.goalsA === liveRep.awayGoals && cum.total >= 90, JSON.stringify(cum));
+check('دقیقه‌ی پایان بین ۹۰ تا ۹۴ است (وقت اضافه)', cum.total >= 90 && cum.total <= 94, cum.total);
+const cumMid = run(`(()=>{const r=state.matchReports[0]; const c=liveCumulative(r, 45);
+  return {h:c.home.shots, a:c.away.shots};})()`);
+check('آمار دقیقه‌ی ۴۵ کمتر یا مساوی پایان بازی است', cumMid.h <= cum.shotsH && cumMid.a <= cum.shotsA);
+const mom = run(`(()=>{const m=liveMomentum(state.matchReports[0], 60); return m.h+m.a;})()`);
+check('نوار فشار بازی همیشه ۱۰۰٪ است', mom === 100, mom);
+let skipOk = true;
+try{ run('skipLive()'); }catch(e){ skipOk = false; liveErr = e.message; }
+check('«پرش به نتیجه» بدون خطا کار می‌کند', skipOk, liveErr);
+check('در پایان پخش، وضعیت به «پایان» تغییر می‌کند', run(`liveCtx && liveCtx.done`) === true);
+run('stopLive(); closeAllOverlays();');
+
+console.log('\n=== ۱۴) فرم ۵ بازی آخر ===');
+run(`closeAllOverlays(); stopLive();`);
+run('playWeek()');   // یک هفته بازی تا فرم تیم ثبت شود
+run(`stopLive(); closeAllOverlays();`);
+const strip = run(`(()=>{const t=state.league.teams.find(x=>x.isUser); return {n:(t.last5||[]).length, html: formStripHTML(t.last5)};})()`);
+check('تیم کاربر بعد از بازی‌ها فرم دارد', strip.n > 0, strip.n + ' بازی');
+check('نوار فرم HTML درست می‌سازد', strip.html.includes('form-strip') && strip.html.includes('fg-'));
+check('فرم خالی هم بدون خطا رندر می‌شود', run(`formStripHTML([])`) === '');
+
+console.log('\n=== ۱۵) پست‌های چندگانه ===');
+const multi = run(`(()=>{
+  let withTwo = 0;
+  for(let i=0;i<300;i++){ const p = genPlayer('MF', 60, 70); if(positionsOf(p).length>1) withTwo++; }
+  return withTwo;
+})()`);
+check('برخی بازیکنان تولیدشده دوپسته هستند', multi > 20, `${multi} از ۳۰۰`);
+check('posLabel پست‌ها را فارسی نشان می‌دهد', run(`posLabel({position:'MF', positions:['MF','DF']})`).includes('/'));
+check('playsIn با پست دوم موافق است', run(`playsIn({position:'MF', positions:['MF','DF']}, 'DF')`) === true);
+check('playsIn با پست بیگانه مخالف است', run(`playsIn({position:'MF', positions:['MF','DF']}, 'GK')`) === false);
+const fitTest = run(`(()=>{
+  const p = state.players[0];
+  const saved = { position:p.position, positions:p.positions };
+  p.position = 'MF'; p.positions = ['MF','DF'];
+  const slots = getSlotTemplate(state.formation);
+  const dfSlot = slots.findIndex(sl=>sl.role==='DF');
+  const gkSlot = slots.findIndex(sl=>sl.role==='GK');
+  const res = { second: roleFitFor(p.id, dfSlot), foreign: roleFitFor(p.id, gkSlot), exact: roleFitFor(p.id, slots.findIndex(sl=>sl.role==='MF')) };
+  p.position = saved.position; p.positions = saved.positions;
+  return res;
+})()`);
+check('پست دوم جریمه‌ی خیلی کم دارد (۰.۹۴)', Math.abs(fitTest.second - 0.94) < 0.001, fitTest.second);
+check('پست اصلی بدون جریمه است (۱)', fitTest.exact === 1, fitTest.exact);
+check('پست بیگانه جریمه‌ی سنگین دارد', fitTest.foreign < 0.75, fitTest.foreign);
+run('autoFillLineup()');
+
+console.log('\n=== ۱۶) چیدمان‌های ذخیره‌شده ===');
+run(`state.lineupPresets = {league:null, cup:null, friendly:null}; state.prefs.autoPresets = true;`);
+run(`setFormation('4-3-3'); autoFillLineup(); state.captainId = state.starters[0];`);
+run(`saveLineupPreset('league')`);
+check('چیدمان لیگ ذخیره شد', run(`!!state.lineupPresets.league`) === true);
+run(`setFormation('5-3-2'); autoFillLineup();`);
+check('تغییر فرمیشن اعمال شد', run(`state.formation`) === '5-3-2');
+run(`loadLineupPreset('league')`);
+check('بارگذاری چیدمان، فرمیشن را برمی‌گرداند', run(`state.formation`) === '4-3-3');
+check('بارگذاری چیدمان، کاپیتان را برمی‌گرداند', run(`!!state.captainId`) === true);
+const autoApplied = run(`(()=>{
+  const before = state.formation;
+  state.prefs.autoPresets = true;
+  state.cup = {stage:'ro8', active:true, log:[]};
+  state.week = CUP_WEEKS.ro8;
+  const snap = captureLineup();
+  const presets = state.lineupPresets;
+  const cupDue = state.cup.active && CUP_WEEKS[state.cup.stage] === state.week;
+  if(state.prefs.autoPresets && cupDue && presets.cup){ applyLineupSnapshot(presets.cup); }
+  const after = state.formation;
+  applyLineupSnapshot(snap);
+  return {before, after, restored: state.formation === before};
+})()`);
+check('اعمال خودکار و بازگردانی چیدمان منطقی است', autoApplied.restored === true, JSON.stringify(autoApplied));
+run(`deleteLineupPreset('league'); _confirmRun();`);
+check('حذف چیدمان با تأیید انجام می‌شود', run(`state.lineupPresets.league`) === null);
+
+console.log('\n=== ۱۷) رندر همه‌ی تب‌ها ===');
 run(`startGame()`);
 const NAV = run('NAV');
 let renders = 0;
