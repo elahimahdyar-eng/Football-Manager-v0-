@@ -10,7 +10,10 @@
     "cap:add:android": "npx cap add android",
     "cap:sync": "npx cap sync",
     "cap:open": "npx cap open android",
-    "test": "node tools/smoketest.js"
+    "test": "node tools/smoketest.js",
+    "test:splash": "node tools/splash-test.js",
+    "test:server": "node tools/server-test.js",
+    "test:client": "node tools/client-online-test.js"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
