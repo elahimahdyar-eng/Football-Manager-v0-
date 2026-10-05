@@ -80,7 +80,7 @@ const localStorage = {
   clear: () => store.clear()
 };
 
-/* ---------- 2) کانتکست و بارگذاری فایل‌ها به ترتیب index.html ---------- */
+/* ---------- 2) کانتکست و بارگذاری فایل‌ها به ترتیب offline.html ---------- */
 const sandbox = {
   document, localStorage, console,
   navigator: {}, location: { href: 'http://localhost/' },
@@ -94,9 +94,9 @@ sandbox.globalThis = sandbox;
 
 const ctx = vm.createContext(sandbox);
 
-const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(ROOT, 'offline.html'), 'utf8');
 const scripts = [...html.matchAll(/<script src="\.\/([^"]+)"><\/script>/g)].map(m => m[1]);
-if (!scripts.length) { console.error('❌ هیچ اسکریپتی در index.html پیدا نشد'); process.exit(1); }
+if (!scripts.length) { console.error('❌ هیچ اسکریپتی در offline.html پیدا نشد'); process.exit(1); }
 for (const f of scripts) {
   const code = fs.readFileSync(path.join(ROOT, f), 'utf8');
   try { vm.runInContext(code, ctx, { filename: f }); }

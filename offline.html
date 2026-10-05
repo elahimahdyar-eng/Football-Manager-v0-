@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مدیر تیم | شبیه‌ساز فوتبال</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./css/style.css">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#111827">
+</head>
+<body>
+<div class="bg-blobs"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<div id="setupScreen" class="app setup-wrap">
+  <div class="card glass" style="width:100%;">
+    <div class="brand-title">مدیر تیم</div>
+    <p class="muted" style="font-size:0.82rem; margin-top:0;">باشگاه خودت رو بساز و فصل اول رو شروع کن</p>
+    <div id="setupSummary" class="glass" style="display:none; border-radius:16px; padding:12px; margin:12px 0;"></div>
+    <div style="margin:14px 0 10px;">
+      <label class="muted" style="font-size:0.78rem;">نام باشگاه</label>
+      <input type="text" id="inpClub" placeholder="مثلاً: آذرخش البرز" style="margin-top:6px;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label class="muted" style="font-size:0.78rem;">نام مدیر (خودت)</label>
+      <input type="text" id="inpManager" placeholder="نام شما" style="margin-top:6px;">
+    </div>
+    <button class="btn primary" style="width:100%; margin-top:8px;" onclick="startGame()">شروع فصل اول</button>
+    <p class="muted" style="font-size:0.7rem; margin-top:12px;">۷ تیم رقیب خودکار ساخته می‌شن. بازی هر تغییر را خودکار در همین مرورگر ذخیره می‌کند. چهره بازیکن‌ها و آرم تیم‌ها کاملاً آفلاین تولید می‌شوند.</p>
+  </div>
+</div>
+
+<div id="gameScreen" style="display:none;">
+  <div class="app" id="scrollArea" style="padding-bottom:150px;">
+    <header class="header-banner glass">
+      <div class="header-top-row">
+        <div class="crest xl" id="hdrCrest"></div>
+        <div class="header-club-info">
+          <div class="name" id="hdrClub">—</div>
+          <div class="manager" id="hdrManager">—</div>
+        </div>
+        <div class="header-budget-chip" id="hdrBudgetChip">💰 <span id="hdrBudget">۰</span></div>
+      </div>
+      <div class="header-stats-row">
+        <div class="hchip">🏆 رتبه <b id="hdrRank">-</b></div>
+        <div class="hchip">⭐ میانگین <b id="hdrAvgOv">-</b></div>
+        <div class="hchip">😊 روحیه <b id="hdrMorale">-</b></div>
+        <div class="hchip">📅 <b id="hdrWeek">هفته ۱</b></div>
+      </div>
+      <div class="season-progress"><div class="fill" id="hdrProgress" style="width:0%"></div></div>
+    </header>
+    <div class="subtab-float" id="subtabFloat" style="display:none;">
+      <div class="subtab-capsule" id="tabsSub"></div>
+    </div>
+    <div id="tabContent"></div>
+  </div>
+
+  <footer class="bottom-nav glass">
+    <div class="footer-inner">
+      <nav class="tabs-main" id="tabsMain"></nav>
+    </div>
+  </footer>
+</div>
+
+<div id="matchModal"></div>
+<div id="pickerModal"></div>
+<div id="genericModal"></div>
+<div id="toastRoot"></div>
+
+<script src="./js/util.js"></script>
+<script src="./js/svg.js"></script>
+<script src="./js/data.js"></script>
+<script src="./js/gen.js"></script>
+<script src="./js/engine.js"></script>
+<script src="./js/game.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/replay.js"></script>
+<script src="./js/livematch.js"></script>
+<script src="./js/challenge.js"></script>
+<script src="./js/league-core.js"></script>
+<script src="./js/league.js"></script>
+<script src="./js/online.js"></script>
+<script src="./js/save.js"></script>
+<script src="./js/sim.js"></script>
+<script src="./js/boot.js"></script>
+<script src="./js/pwa.js"></script>
+</body>
+</html>

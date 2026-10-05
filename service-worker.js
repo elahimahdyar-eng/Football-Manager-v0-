@@ -9,11 +9,11 @@
      پس‌زمینه، برای بارگذاری سریع و کارکرد کامل آفلاین.
    ============================================================ */
 
-const CACHE_NAME = "football-manager-v12";
+const CACHE_NAME = "football-manager-v13";
 
 const CORE_FILES = [
   "./",
-  "./index.html",
+  "./offline.html",
   "./manifest.json",
   "./css/style.css",
   "./js/util.js",
@@ -82,7 +82,7 @@ self.addEventListener("fetch", event => {
           caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
           return response;
         })
-        .catch(() => caches.match(request).then(hit => hit || caches.match("./index.html")))
+        .catch(() => caches.match(request).then(hit => hit || caches.match("./offline.html")))
     );
     return;
   }

@@ -247,8 +247,8 @@ function createProject() {
     const wwwDir = path.join(projectDir, 'app/src/main/assets/www');
     copyRecursive(path.join(SCRIPT_DIR, 'css'), path.join(wwwDir, 'css'));
     copyRecursive(path.join(SCRIPT_DIR, 'js'), path.join(wwwDir, 'js'));
-    fs.copyFileSync(path.join(SCRIPT_DIR, 'app.html'), path.join(wwwDir, 'index.html'));
-    fs.copyFileSync(path.join(SCRIPT_DIR, 'index.html'), path.join(wwwDir, 'game.html'));
+    fs.copyFileSync(path.join(SCRIPT_DIR, 'index.html'), path.join(wwwDir, 'index.html'));
+    fs.copyFileSync(path.join(SCRIPT_DIR, 'offline.html'), path.join(wwwDir, 'offline.html'));
     fs.copyFileSync(path.join(SCRIPT_DIR, 'icon-192.png'), path.join(wwwDir, 'icon-192.png'));
     fs.copyFileSync(path.join(SCRIPT_DIR, 'icon-512.png'), path.join(wwwDir, 'icon-512.png'));
     fs.copyFileSync(path.join(SCRIPT_DIR, 'manifest-app.json'), path.join(wwwDir, 'manifest-app.json'));
@@ -264,8 +264,8 @@ function createProject() {
         ['src="./sw-app.js"', 'src="sw-app.js"'],
     ]);
 
-    // Also fix paths in game.html (offline mode)
-    replaceInFile(path.join(wwwDir, 'game.html'), [
+    // Also fix paths in offline.html (offline mode)
+    replaceInFile(path.join(wwwDir, 'offline.html'), [
         ['href="./css/style.css"', 'href="css/style.css"'],
         ['src="./js/', 'src="js/'],
     ]);
