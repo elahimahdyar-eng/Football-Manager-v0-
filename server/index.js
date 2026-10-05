@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const { URL } = require('url');
 
 const store = require('./store');
+const core = require('../js/league-core.js');
 const { engine, engineFingerprint } = require('./engine-node');
 
 const ROOT = path.join(__dirname, '..');
@@ -31,6 +32,111 @@ const DEV_OTP = process.env.DEV_OTP === '1' || process.env.NODE_ENV !== 'product
 const OTP_TTL = 2 * 60 * 1000;          /* ۲ دقیقه */
 const TOKEN_TTL = 30 * 24 * 3600 * 1000; /* ۳۰ روز */
 const MAX_SQUAD_PLAYERS = 14;
+
+/* ---------- پنجره‌ی هفتگی لیگ (الهام از Hattrick: دوشنبه تا پنجشنبه ترکیب، جمعه بازی) ---------- */
+const TEHRAN_OFFSET_MS = (3*60 + 30) * 60 * 1000;   /* تهران +۳:۳۰ (بدون ساعت تابستانی) */
+const DEFAULT_WINDOW_HOURS = Number(process.env.LEAGUE_WINDOW_HOURS || 168);  /* ۷ روز */
+/* نزدیک‌ترین جمعه‌ی ۰۰:۰۰ تهران (پایان پنجره) */
+function nextFridayClose(fromMs){
+  const t = new Date(fromMs + TEHRAN_OFFSET_MS);
+  const day = t.getUTCDay();                                  /* ۵ = جمعه */
+  const add = (5 - day + 7) % 7;
+  const midnightTehran = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), 0, 0, 0) - TEHRAN_OFFSET_MS;
+  let close = midnightTehran + add * 24 * 3600 * 1000;
+  if(close <= fromMs) close += 7 * 24 * 3600 * 1000;
+  return close;
+}
+function windowClosesAt(league){
+  if(league.windowClosesAt) return league.windowClosesAt;
+  return openWindow(league);
+}
+/* پنجره‌ی هفته‌ی بعد را باز می‌کند */
+function openWindow(league, round){
+  const hours = Number(league.windowHours || DEFAULT_WINDOW_HOURS);
+  const from = now();
+  league.windowOpenedAt = from;
+  league.windowRound = (round === undefined) ? league.week : round;
+  league.windowClosesAt = (process.env.LEAGUE_FRIDAY_WINDOW === '1')
+    ? nextFridayClose(from)
+    : from + Math.max(1000, hours * 3600 * 1000);          /* حداقل ۱ ثانیه (برای دمو/تست سریع) */
+  return league.windowClosesAt;
+}
+function windowOpen(league){ return now() < (league.windowClosesAt || 0); }
+function windowInfo(league){
+  return {
+    opensAt: league.windowOpenedAt || null,
+    closesAt: league.windowClosesAt || null,
+    open: windowOpen(league),
+    hours: Number(league.windowHours || DEFAULT_WINDOW_HOURS),
+    friday: process.env.LEAGUE_FRIDAY_WINDOW === '1'
+  };
+}
+
+/* ---------- تیم‌های AI: لیگ هرگز خالی نمی‌ماند (الگوی کلابی: AI جانشین) ---------- */
+const AI_CLUBS = ['عقاب طلایی','پلنگ سیاه','گرگ خاکستری','شیر سرخ','ببر نارنجی',
+                  'کرکس کبود','آذرخش شرقی','نهنگ آبی','دلفین نقره‌ای','صاعقه زرد'];
+function aiClubName(i){
+  const base = AI_CLUBS[i % AI_CLUBS.length];
+  return i >= AI_CLUBS.length ? (base + ' ' + (Math.floor(i / AI_CLUBS.length) + 1)) : base;
+}
+function aiSquadFor(leagueId, index, season){
+  let st = core.leagueHash(leagueId + ':ai:' + index + ':s' + (season || 1));
+  const rand = ()=>{ st = (st * 1664525 + 1013904223) >>> 0; return st / 4294967296; };
+  const pos = ['GK','DF','DF','DF','DF','MF','MF','MF','MF','FW','FW'];
+  const clubName = aiClubName(index);
+  const base = 60 + (index % 5) * 4;                     /* AI ها درجه‌بندی‌شده‌اند */
+  const players = pos.map((p, i)=>({
+    id: 'ai' + index + '_p' + i,
+    name: clubName + ' ' + (i + 1),
+    pos: p,
+    attack: Math.round(clamp(base + rand() * 12 - 6, 44, 92))
+  }));
+  const avg = players.reduce((a, x)=> a + x.attack, 0) / players.length;
+  return {
+    clubName, formation: '4-4-2', style: 'balanced',
+    atk: Math.round(avg), def: Math.round(avg - 3),
+    fitness: 88, stamina: 78, morale: 76,
+    players, slots: players.map(x=>x.id)
+  };
+}
+function fillLeagueWithAI(league, target){
+  const want = clamp(Math.round(Number(target) || 8), 2, 12);
+  let added = 0;
+  while(league.members.length < want){
+    const i = league.members.length;
+    const squad = aiSquadFor(league.id, i, league.season);
+    league.members.push({ phone: null, clubName: squad.clubName, squad, ai: true, submittedRound: null });
+    added++;
+  }
+  return added;
+}
+
+/* ---------- آمار جانبی لیگ: آقای گل، پاس‌گل، کلین‌شیت ---------- */
+function bumpStat(map, key, name, club, amount){
+  const cur = map[key] || { id: key, name, club, value: 0 };
+  cur.value += amount;
+  map[key] = cur;
+}
+function accumulateSideStats(league, report, homeSquad, awaySquad){
+  const S = league.sideStats || (league.sideStats = { goals: {}, assists: {}, cleanSheets: {} });
+  const stats = report.playerStats || {};
+  Object.keys(stats).forEach(k=>{
+    const ps = stats[k];
+    const sq = ps.side === 'home' ? homeSquad : awaySquad;
+    if(!sq) return;
+    if(ps.goals)   bumpStat(S.goals,   sq.clubName + '|' + k, ps.name, sq.clubName, ps.goals);
+    if(ps.assists) bumpStat(S.assists, sq.clubName + '|' + k, ps.name, sq.clubName, ps.assists);
+  });
+  const gkOf = sq=> (sq.players || []).find(p=> p.pos === 'GK');
+  if(report.awayGoals === 0){ const gk = gkOf(homeSquad); if(gk) bumpStat(S.cleanSheets, homeSquad.clubName + '|' + gk.id, gk.name, homeSquad.clubName, 1); }
+  if(report.homeGoals === 0){ const gk = gkOf(awaySquad); if(gk) bumpStat(S.cleanSheets, awaySquad.clubName + '|' + gk.id, gk.name, awaySquad.clubName, 1); }
+}
+function topStats(map, n){
+  const arr = Object.keys(map || {}).map(k=> map[k]);
+  arr.sort((a, b)=> b.value - a.value || (a.id < b.id ? -1 : 1));
+  return arr.slice(0, n || 10);
+}
+
 
 /* ---------- کمکی‌ها ---------- */
 const SECRET = process.env.SECRET || 'dev-secret-change-me';
@@ -140,12 +246,11 @@ function squadToSide(sq){
 }
 
 /* ---------- لیگ سروری ---------- */
-function leagueFixturesOf(league){ return require('../js/league-core.js').leagueFixturesFromCount(league.members.length); }
+function leagueFixturesOf(league){ return core.leagueFixturesFromCount(league.members.length); }
 function leagueNamesOf(league){ return league.members.map(m=>m.clubName); }
-function leagueIdOf(league){ return require('../js/league-core.js').leagueIdFromNames(league.name, leagueNamesOf(league)); }
+function leagueIdOf(league){ return core.leagueIdFromNames(league.name, leagueNamesOf(league)); }
 
 function simulateLeagueRound(league, round){
-  const core = require('../js/league-core.js');
   const fixtures = core.leagueFixturesFromCount(league.members.length);
   const pairs = fixtures[round] || [];
   const db = store.get();
@@ -155,21 +260,54 @@ function simulateLeagueRound(league, round){
     const key = core.leagueKeyOf(round, hi, ai);
     if(league.results[key]){ out.push({ key, round, hi, ai, cached:true, result: league.results[key] }); return; }
     const seed = core.leagueSeedFrom(league.id, round, A.clubName, B.clubName);
-    const report = engine.simulateMatchEngine(squadToSide(A.squad), squadToSide(B.squad), { seed });
+    const homeSide = squadToSide(A.squad), awaySide = squadToSide(B.squad);
+    const report = engine.simulateMatchEngine(homeSide, awaySide, { seed });
     report.id = 'lg_' + league.id.slice(0,8) + '_' + round + '_' + hi + '_' + ai;
     report.competition = 'server-league';
     report.round = round;
     db.matches[report.id] = report;
     const result = { h: report.homeGoals, a: report.awayGoals, s: seed, hi, ai, r: round, verified: true };
     league.results[key] = result;
+    accumulateSideStats(league, report, A.squad, B.squad);
     out.push({ key, round, hi, ai, result, reportId: report.id });
   });
   store.save();
   return out;
 }
 function leagueTableView(league){
-  const core = require('../js/league-core.js');
   return core.leagueTableFromNames(leagueNamesOf(league), league.results);
+}
+/* بازی یک هفته و باز کردن پنجره‌ی هفته‌ی بعد */
+function advanceRound(league){
+  const round = core.leagueNextRoundFrom(league.members.length, league.results);
+  if(round === null) return { done: true };
+  const matches = simulateLeagueRound(league, round);
+  league.week = round + 1;
+  league.lastSimulatedAt = now();
+  openWindow(league, round + 1);
+  store.save();
+  return { done: false, round, matches };
+}
+/* جمعه‌ها خودش بازی می‌کند: اگر پنجره بسته شد و کسی دکمه نزد، اولین بازدید دور را بازی می‌کند */
+function lazyAdvance(league){
+  if(!league.windowClosesAt) return false;
+  if(now() < league.windowClosesAt) return false;
+  if(league.members.length < 2) return false;
+  if(core.leagueNextRoundFrom(league.members.length, league.results) === null) return false;
+  advanceRound(league);
+  return true;
+}
+/* خلاصه‌ی فصل برای تاریخچه */
+function seasonSummary(league){
+  const table = leagueTableView(league);
+  const scorer = topStats((league.sideStats || {}).goals, 1)[0] || null;
+  return {
+    season: league.season || 1,
+    champion: table[0] ? table[0].name : null,
+    runnerUp: table[1] ? table[1].name : null,
+    topScorer: scorer ? (scorer.name + ' (' + scorer.club + ')') : null,
+    at: now()
+  };
 }
 
 /* ============================================================
@@ -233,8 +371,7 @@ async function handleApi(req, res, u){
     const leagues = (s.player.leagueIds||[]).map(id=>{
       const L = db.leagues[id];
       if(!L) return null;
-      const core = require('../js/league-core.js');
-      return { id, name: L.name, members: L.members.length,
+          return { id, name: L.name, members: L.members.length,
         nextRound: core.leagueNextRoundFrom(L.members.length, L.results),
         isOwner: L.ownerPhone === s.phone, joined: true };
     }).filter(Boolean);
@@ -288,9 +425,18 @@ async function handleApi(req, res, u){
     const id = rid('L', 6);
     const league = {
       id, name, ownerPhone: s.phone, createdAt: now(),
-      members: [{ phone: s.phone, clubName: s.player.squad.clubName, squad: s.player.squad }],
-      results: {}, week: 0
+      season: 1, week: 0,
+      members: [{ phone: s.phone, clubName: s.player.squad.clubName, squad: s.player.squad, submittedRound: 0 }],
+      results: {}, sideStats: { goals: {}, assists: {}, cleanSheets: {} }, history: []
     };
+    /* پنجره‌ی هفتگی: پیش‌فرض یک هفته؛ برای دمو/تست می‌شود کوتاهش کرد */
+    if(body.windowHours !== undefined){
+      const h = Number(body.windowHours);
+      if(Number.isFinite(h) && h >= 0.0003 && h <= 720) league.windowHours = h;
+    }
+    /* تیم‌های AI: لیگ هرگز خالی نمی‌ماند (با fillAI:false خاموش می‌شود) */
+    if(body.fillAI !== false) fillLeagueWithAI(league, Number(body.fillTo) || 8);
+    openWindow(league, 0);
     db.leagues[id] = league;
     if(!s.player.leagueIds) s.player.leagueIds = [];
     s.player.leagueIds.push(id);
@@ -321,6 +467,7 @@ async function handleApi(req, res, u){
     if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
     const L = db.leagues[getMatch[1]];
     if(!L) return sendJson(res, 404, { error: 'لیگ پیدا نشد.' });
+    lazyAdvance(L);   /* اگر پنجره بسته شده باشد، همین‌جا هفته بازی می‌شود (جمعه‌ها خودکار) */
     return sendJson(res, 200, { league: leagueView(L, s.phone), fingerprint: engineFingerprint() });
   }
   /* --- شبیه‌سازی دور جاری (سرور، معتبر) --- */
@@ -331,15 +478,89 @@ async function handleApi(req, res, u){
     const L = db.leagues[simMatch[1]];
     if(!L) return sendJson(res, 404, { error: 'لیگ پیدا نشد.' });
     if(L.members.length < 2) return sendJson(res, 400, { error: 'برای شبیه‌سازی حداقل ۲ تیم لازم است.' });
-    const core = require('../js/league-core.js');
     const round = core.leagueNextRoundFrom(L.members.length, L.results);
     if(round === null) return sendJson(res, 200, { ok: true, done: true, league: leagueView(L, s.phone) });
-    const matches = simulateLeagueRound(L, round);
-    L.week = round + 1;
-    store.save();
-    return sendJson(res, 200, { ok: true, round, matches: matches.map(m=>({ key:m.key, home:leagueNamesOf(L)[m.hi], away:leagueNamesOf(L)[m.ai], result:m.result, reportId:m.reportId })),
+    const adv = advanceRound(L);
+    const matches = adv.matches || [];
+    return sendJson(res, 200, { ok: true, round: adv.round, matches: matches.map(m=>({ key:m.key, home:leagueNamesOf(L)[m.hi], away:leagueNamesOf(L)[m.ai], result:m.result, reportId:m.reportId })),
       league: leagueView(L, s.phone) });
   }
+  /* --- ثبت ترکیب برای هفته‌ی جاری (پنجره‌ی هفتگی) --- */
+  const subMatch = p.match(/^\/api\/leagues\/([A-Za-z0-9]+)\/submit-squad$/);
+  if(subMatch && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const L = db.leagues[subMatch[1]];
+    if(!L) return sendJson(res, 404, { error: 'لیگ پیدا نشد.' });
+    const m = L.members.find(x=> x.phone && x.phone === s.phone);
+    if(!m) return sendJson(res, 403, { error: 'تو عضو این لیگ نیستی.' });
+    if(!windowOpen(L)) return sendJson(res, 400, { error: 'پنجره‌ی این هفته بسته شده؛ هفته‌ی بعد ثبت کن.' });
+    const body = await readBody(req);
+    if(body.squad) m.squad = body.squad; else if(s.player.squad) m.squad = s.player.squad;
+    if(!m.squad) return sendJson(res, 400, { error: 'ترکیبی برای ثبت نیست؛ اول ترکیبت را آپلود کن.' });
+    const round = core.leagueNextRoundFrom(L.members.length, L.results);
+    m.submittedRound = round;
+    m.clubName = m.squad.clubName || m.clubName;
+    store.save();
+    return sendJson(res, 200, { ok: true, submittedRound: round, league: leagueView(L, s.phone) });
+  }
+  /* --- پر کردن لیگ با تیم‌های AI (میزبان، پیش از شروع) --- */
+  const fillMatch = p.match(/^\/api\/leagues\/([A-Za-z0-9]+)\/fillai$/);
+  if(fillMatch && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const L = db.leagues[fillMatch[1]];
+    if(!L) return sendJson(res, 404, { error: 'لیگ پیدا نشد.' });
+    if(L.ownerPhone !== s.phone) return sendJson(res, 403, { error: 'فقط میزبان لیگ می‌تواند تیم AI اضافه کند.' });
+    if(Object.keys(L.results).length) return sendJson(res, 400, { error: 'لیگ شروع شده؛ تیم جدید ممکن نیست.' });
+    const body = await readBody(req);
+    const added = fillLeagueWithAI(L, Number(body.target) || 8);
+    store.save();
+    return sendJson(res, 200, { ok: true, added, league: leagueView(L, s.phone) });
+  }
+  /* --- بستن پنجره و بازی هفته (میزبان: فوری) --- */
+  const advMatch = p.match(/^\/api\/leagues\/([A-Za-z0-9]+)\/advance$/);
+  if(advMatch && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const L = db.leagues[advMatch[1]];
+    if(!L) return sendJson(res, 404, { error: 'لیگ پیدا نشد.' });
+    const body = await readBody(req);
+    const force = body.force === true;
+    if(force && L.ownerPhone !== s.phone) return sendJson(res, 403, { error: 'بازی فوری فقط توسط میزبان ممکن است.' });
+    if(!force && windowOpen(L)) return sendJson(res, 400, { error: 'پنجره هنوز باز است؛ منتظر پایان پنجره بمان یا میزبان فوری بازی کند.', window: windowInfo(L) });
+    if(L.members.length < 2) return sendJson(res, 400, { error: 'برای بازی حداقل ۲ تیم لازم است.' });
+    const adv = advanceRound(L);
+    if(adv.done) return sendJson(res, 200, { ok: true, done: true, league: leagueView(L, s.phone) });
+    return sendJson(res, 200, { ok: true, round: adv.round, forced: force,
+      matches: (adv.matches || []).map(m=>({ key:m.key, home:leagueNamesOf(L)[m.hi], away:leagueNamesOf(L)[m.ai], result:m.result, reportId:m.reportId })),
+      league: leagueView(L, s.phone) });
+  }
+  /* --- فصل جدید (میزبان، بعد از پایان فصل) --- */
+  const nsMatch = p.match(/^\/api\/leagues\/([A-Za-z0-9]+)\/newseason$/);
+  if(nsMatch && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const L = db.leagues[nsMatch[1]];
+    if(!L) return sendJson(res, 404, { error: 'لیگ پیدا نشد.' });
+    if(L.ownerPhone !== s.phone) return sendJson(res, 403, { error: 'فقط میزبان می‌تواند فصل جدید بسازد.' });
+    if(core.leagueNextRoundFrom(L.members.length, L.results) !== null)
+      return sendJson(res, 400, { error: 'فصل جاری تمام نشده.' });
+    L.history = L.history || [];
+    L.history.push(seasonSummary(L));
+    L.season = (L.season || 1) + 1;
+    L.results = {};
+    L.sideStats = { goals: {}, assists: {}, cleanSheets: {} };
+    L.week = 0;
+    L.members.forEach((m, i)=>{
+      m.submittedRound = null;
+      if(m.ai) m.squad = aiSquadFor(L.id, i, L.season);
+    });
+    openWindow(L, 0);
+    store.save();
+    return sendJson(res, 200, { ok: true, season: L.season, league: leagueView(L, s.phone) });
+  }
+
   /* --- تأیید نتیجه‌ی اعلامی کلاینت (ضدتقلب) --- */
   const vMatch = p.match(/^\/api\/leagues\/([A-Za-z0-9]+)\/verify$/);
   if(vMatch && req.method === 'POST'){
@@ -350,8 +571,7 @@ async function handleApi(req, res, u){
     const body = await readBody(req);
     const round = num(body.round, -1), homeGoals = num(body.homeGoals, -1), awayGoals = num(body.awayGoals, -1);
     const hi = num(body.hi, -1), ai = num(body.ai, -1);
-    const core = require('../js/league-core.js');
-    if(hi < 0 || ai < 0 || hi >= L.members.length || ai >= L.members.length || hi === ai)
+      if(hi < 0 || ai < 0 || hi >= L.members.length || ai >= L.members.length || hi === ai)
       return sendJson(res, 400, { error: 'اندیس تیم‌ها نامعتبر است.' });
     const A = L.members[hi], B = L.members[ai];
     const seed = core.leagueSeedFrom(L.id, round, A.clubName, B.clubName);
@@ -374,7 +594,6 @@ async function handleApi(req, res, u){
   return sendJson(res, 404, { error: 'این مسیر API وجود ندارد.', path: p });
 }
 function gradeResult(L, round, hi, ai, report, seed){
-  const core = require('../js/league-core.js');
   const key = core.leagueKeyOf(round, hi, ai);
   L.results[key] = { h: report.homeGoals, a: report.awayGoals, s: seed, hi, ai, r: round, verified: true };
   return L.results[key];
@@ -384,18 +603,33 @@ function publicPlayer(p){
     hasSquad: !!p.squad, leagues: (p.leagueIds||[]).length };
 }
 function leagueView(L, phone){
-  const core = require('../js/league-core.js');
   const names = leagueNamesOf(L);
   const next = core.leagueNextRoundFrom(L.members.length, L.results);
   const table = core.leagueTableFromNames(names, L.results);
+  const me = L.members.find(m=> m.phone && m.phone === phone) || null;
   return {
     id: L.id, name: L.name, teams: names.length, names,
-    week: L.week, nextRound: next,
+    season: L.season || 1, week: L.week, nextRound: next,
     totalRounds: core.leagueRoundCountFromCount(L.members.length),
     fixtures: core.leagueFixturesFromCount(L.members.length),
     results: L.results, table,
-    members: L.members.map(m=>({ clubName: m.clubName, hasSquad: !!m.squad, isMe: m.phone === phone })),
+    window: windowInfo(L),
+    windowRound: (L.windowRound === undefined) ? L.week : L.windowRound,
+    mySubmitted: !!(me && me.submittedRound !== null && me.submittedRound !== undefined && me.submittedRound === next),
+    started: Object.keys(L.results).length > 0,
+    aiCount: L.members.filter(m=> m.ai).length,
+    members: L.members.map(m=>({
+      clubName: m.clubName, hasSquad: !!m.squad, isMe: !!m.phone && m.phone === phone,
+      ai: !!m.ai, submitted: m.submittedRound !== null && m.submittedRound !== undefined
+    })),
+    sideStats: {
+      scorers: topStats((L.sideStats || {}).goals, 10),
+      assists: topStats((L.sideStats || {}).assists, 10),
+      cleanSheets: topStats((L.sideStats || {}).cleanSheets, 10)
+    },
+    history: L.history || [],
     isOwner: L.ownerPhone === phone,
+    canNewSeason: next === null && Object.keys(L.results).length > 0,
     point: 'سرور خودش موتور را اجرا می‌کند؛ نتیجه‌ی اعلامی کلاینت فقط با بازتولید تأیید می‌شود.'
   };
 }

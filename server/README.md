@@ -31,6 +31,8 @@ node server/index.js
 | `SECRET` | `dev-secret-change-me` | کلید امضای کدهای ورود — **در production حتماً عوضش کن** |
 | `DEV_OTP` | اگر `NODE_ENV≠production` روشن | کد ورود در پاسخ API و در کنسول چاپ می‌شود (برای تست) |
 | `SMS_API_KEY` / `SMS_TEMPLATE` | — | ارسال واقعی پیامک با کاوه‌نگار (اختیاری) |
+| `LEAGUE_WINDOW_HOURS` | `168` | طول پنجره‌ی هفتگی ثبت ترکیب (ساعت) |
+| `LEAGUE_FRIDAY_WINDOW` | `0` | اگر `1` باشد، پنجره **جمعه ۰۰:۰۰ تهران** بسته می‌شود (الگوی Hattrick) |
 
 نمونه‌ی production:
 
@@ -42,9 +44,9 @@ SMS_API_KEY=xxxx SMS_TEMPLATE=football-login PORT=8080 node server/index.js
 ## تست
 
 ```bash
-node tools/server-test.js         # ۵۴ بررسی E2E روی یک سرور واقعی (پورت تصادفی، داده‌ی موقت)
-node tools/client-online-test.js  # ۳۷ بررسی یکپارچه: کلاینت واقعی ⇄ سرور واقعی (fetch واقعی، بدون mock)
-node tools/smoketest.js           # ۱۱۳ بررسی کل بازی (آفلاین، بدون سرور)
+node tools/server-test.js         # ۸۶ بررسی E2E روی یک سرور واقعی (پورت تصادفی، داده‌ی موقت)
+node tools/client-online-test.js  # ۵۲ بررسی یکپارچه: کلاینت واقعی ⇄ سرور واقعی (fetch واقعی، بدون mock)
+node tools/smoketest.js           # ۱۱۵ بررسی کل بازی (آفلاین، بدون سرور)
 node tools/engine-parity.js   # اثبات قطعیت موتور (کلاینت ↔ سرور)
 ```
 
@@ -62,6 +64,10 @@ node tools/engine-parity.js   # اثبات قطعیت موتور (کلاینت �
 | `POST` | `/api/leagues/:id/join` | عضویت در لیگ (Bearer) |
 | `GET` | `/api/leagues/:id` | جدول + برنامه + seedهای دور (Bearer) |
 | `POST` | `/api/leagues/:id/simulate` | سرور خودش دور جاری را بازی می‌کند (Bearer) |
+| `POST` | `/api/leagues/:id/submit-squad` | ثبت ترکیب برای هفته‌ی جاری (Bearer) |
+| `POST` | `/api/leagues/:id/fillai` | پر کردن لیگ با تیم‌های AI (میزبان) |
+| `POST` | `/api/leagues/:id/advance` | بستن پنجره و بازی هفته (`{force:true}` = میزبان) |
+| `POST` | `/api/leagues/:id/newseason` | شروع فصل جدید + ثبت تاریخچه (میزبان) |
 | `POST` | `/api/leagues/:id/verify` | تأیید/رد نتیجه‌ی اعلامی کلاینت (Bearer) |
 | `GET` | `/api/matches/:id` | گزارش کامل یک مسابقه |
 

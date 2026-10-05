@@ -124,7 +124,7 @@ async function login(phone, clubName){
   const me4 = await login('09120000004', 'بی‌ترکیب');   /* عضو بدون آپلود ترکیب */
   const noSquadLeague = await api('POST', '/api/leagues', { name: 'تست' }, me4.token);
   check('ساخت لیگ بدون ترکیب رد می‌شود', noSquadLeague.status === 400, noSquadLeague.json && noSquadLeague.json.error);
-  const created = await api('POST', '/api/leagues', { name: 'لیگ تستی سرور' }, me1.token);
+  const created = await api('POST', '/api/leagues', { name: 'لیگ تستی سرور', fillAI: false }, me1.token);
   check('لیگ ساخته می‌شود', created.status === 201 && created.json.league.id, created.status);
   const leagueId = created.json.league.id;
   const badJoin = await api('POST', `/api/leagues/ZZZZZZ/join`, {}, me2.token);
@@ -206,13 +206,113 @@ async function login(phone, clubName){
   const more = await api('POST', `/api/leagues/${leagueId}/simulate`, {}, me1.token);
   check('بعد از پایان لیگ، شبیه‌سازی می‌گوید تمام شد', more.json.done === true, JSON.stringify(more.json.done));
 
+  console.log('\n=== ۱۲.۵) گام ۳: هفته‌ی لیگ، تیم‌های AI، آمار جانبی و فصل جدید ===');
+  /* لیگ تازه با ۴ تیم AI (۶ تیمی) — همه‌چیز روی سرور */
+  const weekly = await api('POST', '/api/leagues', { name: 'لیگ هفتگی', fillAI: true, fillTo: 6, windowHours: 168 }, me1.token);
+  const W = weekly.json.league;
+  check('ساخت لیگ با تیم‌های AI جواب می‌دهد (۶ تیم)', W.teams === 6 && W.aiCount >= 4, JSON.stringify({teams:W.teams, ai:W.aiCount}));
+  check('پنجره‌ی هفتگی باز است و ساعت پایان دارد', W.window.open === true && W.window.closesAt > Date.now(), JSON.stringify(W.window));
+  check('دورهای لیگ ۶ تیمی = ۵ دور و ۱۵ مسابقه',
+    W.totalRounds === 5 && W.fixtures.reduce((a,rd)=>a+rd.length,0) === 15, JSON.stringify({r:W.totalRounds}));
+  check('نام تیم‌های AI یکتاست', new Set(W.names).size === W.names.length, W.names.join(' | '));
+
+  /* ثبت ترکیب برای هفته */
+  const sub = await api('POST', `/api/leagues/${W.id}/submit-squad`, {}, me1.token);
+  check('ثبت ترکیب برای هفته‌ی جاری انجام می‌شود', sub.status === 200 && sub.json.ok === true, JSON.stringify(sub.json.submittedRound));
+  check('پرچم «ترکیب این هفته را دادم» ست می‌شود', sub.json.league.mySubmitted === true);
+  const subOutsider = await api('POST', `/api/leagues/${W.id}/submit-squad`, {}, me4.token);
+  check('غیرعضو نمی‌تواند ترکیب ثبت کند', subOutsider.status === 403, subOutsider.json && subOutsider.json.error);
+
+  /* بستن پنجره: بدون اجبار برای غیرمیزبان ممنوع، با اجبار فقط میزبان */
+  const advNoForce = await api('POST', `/api/leagues/${W.id}/advance`, {}, me1.token);
+  check('در پنجره‌ی باز، بازی بدون اجبار رد می‌شود', advNoForce.status === 400, advNoForce.json && advNoForce.json.error);
+  const joinW = await api('POST', `/api/leagues/${W.id}/join`, {}, me2.token);
+  check('رفیق می‌تواند به لیگ AI دار ملحق شود', joinW.status === 200 && joinW.json.league.teams === 7, joinW.json.league.teams);
+  const forceByOther = await api('POST', `/api/leagues/${W.id}/advance`, { force: true }, me2.token);
+  check('بازی فوری توسط غیرمیزبان رد می‌شود', forceByOther.status === 403, forceByOther.json && forceByOther.json.error);
+  const forceAdv = await api('POST', `/api/leagues/${W.id}/advance`, { force: true }, me1.token);
+  check('میزبان می‌تواند پنجره را ببندد و هفته را فوری بازی کند', forceAdv.status === 200 && forceAdv.json.round === 0, JSON.stringify(forceAdv.json.round));
+  check('دور بازی‌شده به تعداد تیم‌ها/۲ مسابقه دارد', forceAdv.json.matches.length === 3, forceAdv.json.matches.length);
+  check('بعد از بازی، پنجره‌ی هفته‌ی بعد باز می‌شود', forceAdv.json.league.window.open === true && forceAdv.json.league.windowRound === 1,
+    JSON.stringify({open:forceAdv.json.league.window.open, round:forceAdv.json.league.windowRound}));
+
+  /* تیم‌های AI واقعاً بازی می‌کنند و گل می‌زنند */
+  const goalsFromResults = Object.keys(forceAdv.json.league.results).reduce((a,k)=>{
+    const r = forceAdv.json.league.results[k]; return a + r.h + r.a;
+  }, 0);
+  const goalsFromStats = forceAdv.json.league.sideStats.scorers.reduce((a,x)=>a+x.value, 0);
+  check('مجموع گل‌های آمار جانبی = مجموع گل‌های نتایج', goalsFromStats === goalsFromResults,
+    JSON.stringify({stats:goalsFromStats, results:goalsFromResults}));
+  check('آقای گل لیگ مشخص است', forceAdv.json.league.sideStats.scorers.length > 0 && forceAdv.json.league.sideStats.scorers[0].value >= 1,
+    JSON.stringify(forceAdv.json.league.sideStats.scorers[0] || null));
+  check('کلین‌شیت هم ثبت می‌شود', Array.isArray(forceAdv.json.league.sideStats.cleanSheets));
+  check('تیم‌های AI در جدول امتیاز و بازی دارند', forceAdv.json.league.table.filter(t=>t.played > 0).length >= 6,
+    JSON.stringify(forceAdv.json.league.table.map(t=>[t.name, t.played])));
+
+  /* پنجره‌ی کوتاه + بازی خودکار (شبیه‌سازی «جمعه») */
+  const fast = await api('POST', '/api/leagues', { name: 'لیگ سریع', fillAI: true, fillTo: 4, windowHours: 0.0006 }, me1.token);
+  const F = fast.json.league;
+  check('پنجره‌ی کوتاه پذیرفته می‌شود (برای دموی سریع)', F.window.open === true && (F.window.closesAt - Date.now()) < 60000,
+    JSON.stringify({ms: F.window.closesAt - Date.now()}));
+  await new Promise(r=> setTimeout(r, 2600));   /* صبر تا بسته شدن پنجره‌ی ۲.۱۶ ثانیه‌ای */
+  const advLazy = await api('POST', `/api/leagues/${F.id}/advance`, {}, me1.token);
+  check('بعد از پایان زمان، بازی بدون اجبار قبول می‌شود (یعنی پنجره بسته شده)',
+    advLazy.status === 200 && advLazy.json.round === 0, JSON.stringify({status: advLazy.status, round: advLazy.json.round}));
+  check('دور با همه‌ی مسابقه‌ها بازی شد (۴ تیم ⇒ ۲ مسابقه)', (advLazy.json.matches || []).length === 2, (advLazy.json.matches || []).length);
+  check('پنجره‌ی هفته‌ی بعد بعد از بازی باز است', advLazy.json.league.window.open === true && advLazy.json.league.windowRound === 1,
+    JSON.stringify({open: advLazy.json.league.window.open, round: advLazy.json.league.windowRound}));
+
+  /* حالت واقعی «جمعه»: کسی دکمه‌ای نمی‌زند و بازدید بعدی خودش هفته را بازی می‌کند */
+  const fast2 = await api('POST', '/api/leagues', { name: 'لیگ سریع ۲', fillAI: true, fillTo: 4, windowHours: 0.0004 }, me1.token);
+  await new Promise(r=> setTimeout(r, 2200));
+  const lazyGet = await api('GET', `/api/leagues/${fast2.json.league.id}`, undefined, me1.token);
+  check('بازدید بعدی (بدون هیچ دکمه‌ای) هفته را خودکار بازی می‌کند',
+    Object.keys(lazyGet.json.league.results).length > 0, JSON.stringify(Object.keys(lazyGet.json.league.results).length));
+  check('و پنجره‌ی هفته‌ی بعد را باز می‌گذارد',
+    lazyGet.json.league.window.open === true && lazyGet.json.league.windowRound === 1,
+    JSON.stringify({open: lazyGet.json.league.window.open, round: lazyGet.json.league.windowRound}));
+
+  /* پر کردن لیگ با AI پس از ساخت */
+  const noAi = await api('POST', '/api/leagues', { name: 'لیگ خالی', fillAI: false }, me3.token);
+  const fill = await api('POST', `/api/leagues/${noAi.json.league.id}/fillai`, { target: 5 }, me3.token);
+  check('میزبان می‌تواند لیگ را با AI پر کند', fill.status === 200 && fill.json.added === 4 && fill.json.league.teams === 5,
+    JSON.stringify({added: fill.json.added, teams: fill.json.league.teams}));
+  const fillAgain = await api('POST', `/api/leagues/${noAi.json.league.id}/fillai`, { target: 5 }, me3.token);
+  check('پر کردن دوباره چیزی اضافه نمی‌کند', fillAgain.json.added === 0);
+  const fillByOther = await api('POST', `/api/leagues/${noAi.json.league.id}/fillai`, { target: 8 }, me2.token);
+  check('غیرمیزبان نمی‌تواند AI اضافه کند', fillByOther.status === 403, fillByOther.json && fillByOther.json.error);
+
+  /* فصل جدید: تمام کردن لیگ سریع، بعد ساخت فصل بعدی */
+  const little = await api('POST', '/api/leagues', { name: 'لیگ یک‌فصله', fillAI: true, fillTo: 4 }, me1.token);
+  const LID = little.json.league.id;
+  let guard = 0, st = null;
+  while(guard < 6){
+    const adv = await api('POST', `/api/leagues/${LID}/advance`, { force: true }, me1.token);
+    guard++;
+    if(adv.json.done) break;
+  }
+  const doneLeague = await api('GET', `/api/leagues/${LID}`, undefined, me2.token);
+  check('لیگ ۴ تیمی در ۳ هفته تمام می‌شود', doneLeague.json.league.nextRound === null && doneLeague.json.league.canNewSeason === true,
+    JSON.stringify({next: doneLeague.json.league.nextRound, canNew: doneLeague.json.league.canNewSeason}));
+  const newSeasonByOther = await api('POST', `/api/leagues/${LID}/newseason`, {}, me2.token);
+  check('فصل جدید فقط با میزبان ممکن است', newSeasonByOther.status === 403, newSeasonByOther.json && newSeasonByOther.json.error);
+  const newSeason = await api('POST', `/api/leagues/${LID}/newseason`, {}, me1.token);
+  check('فصل جدید ساخته می‌شود (season=2)', newSeason.status === 200 && newSeason.json.season === 2, JSON.stringify(newSeason.json.season));
+  check('فصل جدید با جدول خالی و پنجره‌ی باز شروع می‌شود',
+    Object.keys(newSeason.json.league.results).length === 0 && newSeason.json.league.window.open === true &&
+    newSeason.json.league.nextRound === 0);
+  check('تاریخچه‌ی فصل قبل با قهرمان ثبت شده', newSeason.json.league.history.length === 1 &&
+    !!newSeason.json.league.history[0].champion, JSON.stringify(newSeason.json.league.history));
+  check('تیم‌های AI در فصل جدید هم حاضرند', newSeason.json.league.aiCount >= 3, newSeason.json.league.aiCount);
+
   console.log('\n=== ۱۳) داده‌ی ماندگار روی دیسک ===');
   require('../server/store.js').saveNow();   /* ذخیره‌ی فوری: همان کاری که در SIGTERM انجام می‌شود */
   const dbFile = path.join(TMP, 'db.json');
   check('فایل داده ساخته شد', fs.existsSync(dbFile));
   const dbObj = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
   check('چهار بازیکن ذخیره شده‌اند', Object.keys(dbObj.players).length === 4, Object.keys(dbObj.players).length);
-  check('لیگ با نتایجش ذخیره شده', Object.keys(dbObj.leagues).length === 1 && Object.keys(dbObj.leagues[leagueId].results).length === 3);
+  check('لیگ اصلی با نتایجش ذخیره شده', !!dbObj.leagues[leagueId] && Object.keys(dbObj.leagues[leagueId].results).length === 3,
+    JSON.stringify({leagues: Object.keys(dbObj.leagues).length}));
   check('توکن‌ها ذخیره شده‌اند (۳ بازیکن واردشده + ۱ بازیکن چهارم)',
     Object.keys(dbObj.tokens).length === 4, Object.keys(dbObj.tokens).length);
   check('کدهای ورود هرگز خام ذخیره نمی‌شوند (هش‌شده‌اند)',
@@ -220,7 +320,7 @@ async function login(phone, clubName){
     Object.values(dbObj.otps).map(o=>String(o.code).slice(0,8)).join(','));
   check('کد مصرف‌شده بعد از ورود پاک می‌شود (فقط کد تأییدنشده می‌ماند)',
     Object.keys(dbObj.otps).length === 1, Object.keys(dbObj.otps).length);
-  check('گزارش‌های مسابقات ذخیره شده‌اند', Object.keys(dbObj.matches).length === 3, Object.keys(dbObj.matches).length);
+  check('گزارش‌های مسابقات ذخیره شده‌اند (همه‌ی لیگ‌ها)', Object.keys(dbObj.matches).length >= 3, Object.keys(dbObj.matches).length);
 
   /* ---------- نتیجه ---------- */
   server.close();

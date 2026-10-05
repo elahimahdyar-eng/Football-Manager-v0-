@@ -9,7 +9,7 @@
      پس‌زمینه، برای بارگذاری سریع و کارکرد کامل آفلاین.
    ============================================================ */
 
-const CACHE_NAME = "football-manager-v11";
+const CACHE_NAME = "football-manager-v12";
 
 const CORE_FILES = [
   "./",

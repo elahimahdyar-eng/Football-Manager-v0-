@@ -114,6 +114,20 @@ function onlineLogout(){
     onYes(){ setOnlineToken(''); const O = onlineState(); O.player = null; O.leagues = []; O.currentLeague = null; showToast('از حساب آنلاین خارج شدی.'); render(); } });
 }
 
+/* ---------- تاریخ و مدت (فارسی، بدون وابستگی) ---------- */
+function faDuration(ms){
+  if(!(ms > 0)) return 'به پایان رسیده';
+  const mins = Math.floor(ms / 60000), hours = Math.floor(mins / 60), days = Math.floor(hours / 24);
+  if(days > 0) return `${faNum(days)} روز و ${faNum(hours % 24)} ساعت`;
+  if(hours > 0) return `${faNum(hours)} ساعت و ${faNum(mins % 60)} دقیقه`;
+  return `${faNum(Math.max(1, mins))} دقیقه`;
+}
+function faDateTime(ts){
+  if(!ts) return '—';
+  try{ return new Date(ts).toLocaleString('fa-IR', { weekday:'long', hour:'2-digit', minute:'2-digit' }); }
+  catch(e){ return new Date(ts).toISOString().slice(5, 16).replace('T', ' '); }
+}
+
 /* ---------- همگام‌سازی ---------- */
 async function onlineRefresh(){
   if(!onlineLoggedIn()){ onlineState().player = null; return null; }
@@ -141,16 +155,24 @@ async function onlineUploadSquad(quiet){
   return r;
 }
 /* ساخت و عضویت */
-async function onlineCreateLeague(name){
+async function onlineCreateLeague(name, opts){
   const n = sanitizeName((name||'').trim(), '', 26);
   if(!n){ showToast('اسم لیگ را وارد کن.', 'error'); return null; }
   if(!state.online || !state.online.player || !state.online.player.hasSquad){
     showToast('اول ترکیبت را آپلود کن.', 'error'); return null;
   }
-  const r = await onlineFetch('/api/leagues', { method:'POST', body:{ name:n } });
+  const o = opts || {};
+  const r = await onlineFetch('/api/leagues', { method:'POST', body:{
+    name: n,
+    fillAI: o.fillAI !== false,                 /* پیش‌فرض: با تیم‌های AI پر شود تا لیگ بازی‌شدنی باشد */
+    fillTo: o.fillTo || 8,
+    windowHours: o.windowHours || undefined
+  } });
   if(!r.ok){ showToast(r.error || 'ساخت لیگ ناموفق بود.', 'error'); return null; }
-  onlineState().currentLeague = r.league.id;
-  showToast('لیگ «' + n + '» ساخته شد ✅ — شناسه: ' + r.league.id + ' (برای رفقا بفرست)');
+  const O = onlineState();
+  O.currentLeague = r.league.id;
+  O.leagueView = r.league;
+  showToast('لیگ «' + n + '» ساخته شد ✅ — شناسه: ' + r.league.id + ' (برای رفقا بفرست)' + (r.league.aiCount ? ` · ${faNum(r.league.aiCount)} تیم AI` : ''));
   await onlineRefresh();
   return r.league;
 }
@@ -197,6 +219,61 @@ async function onlineSimulateRound(){
   }
   return r;
 }
+/* ---------- عملیات هفته‌ای لیگ ---------- */
+/* ثبت ترکیب برای هفته‌ی جاری (تا وقتی پنجره باز است) */
+async function onlineSubmitWeek(){
+  const O = onlineState();
+  if(!O.currentLeague) return null;
+  O.busy = true; render();
+  const r = await onlineFetch('/api/leagues/' + encodeURIComponent(O.currentLeague) + '/submit-squad', { method:'POST', body:{} });
+  O.busy = false;
+  if(!r.ok){ showToast(r.error || 'ثبت ترکیب هفته ناموفق بود.', 'error'); render(); return null; }
+  if(r.league) O.leagueView = r.league;
+  showToast('ترکیب این هفته ثبت شد ✅ (تا پایان پنجره می‌توانی عوضش کنی)');
+  render();
+  return r;
+}
+/* پر کردن لیگ با تیم‌های AI (میزبان، پیش از شروع) */
+async function onlineFillAi(target){
+  const O = onlineState();
+  if(!O.currentLeague) return null;
+  const r = await onlineFetch('/api/leagues/' + encodeURIComponent(O.currentLeague) + '/fillai', { method:'POST', body:{ target: target || 8 } });
+  if(!r.ok){ showToast(r.error || 'افزودن تیم AI ناموفق بود.', 'error'); return null; }
+  if(r.league) O.leagueView = r.league;
+  showToast(r.added ? `${faNum(r.added)} تیم AI اضافه شد ✅` : 'لیگ همین حالا پر است.');
+  render();
+  return r;
+}
+/* بستن پنجره و بازی فوری (میزبان) */
+async function onlineForceAdvance(){
+  const O = onlineState();
+  if(!O.currentLeague) return null;
+  const go = async()=>{
+    O.busy = true; render();
+    const r = await onlineFetch('/api/leagues/' + encodeURIComponent(O.currentLeague) + '/advance', { method:'POST', body:{ force:true } });
+    O.busy = false;
+    if(!r.ok){ showToast(r.error || 'بازی فوری ناموفق بود.', 'error'); render(); return null; }
+    if(r.league) O.leagueView = r.league;
+    if(r.matches && r.matches.length) onlineRoundModal(r);
+    else { showToast('فصل تمام شده — «فصل جدید» را بزن.'); }
+    render();
+    return r;
+  };
+  askConfirm({ title:'بستن پنجره و بازی فوری؟', body:'همه‌ی مسابقات همین هفته بازی می‌شود (به‌جای انتظار تا پایان پنجره).', yes:'بازی کن', onYes:go });
+  return true;
+}
+/* فصل جدید (میزبان، بعد از پایان فصل) */
+async function onlineNewSeason(){
+  const O = onlineState();
+  if(!O.currentLeague) return null;
+  const r = await onlineFetch('/api/leagues/' + encodeURIComponent(O.currentLeague) + '/newseason', { method:'POST', body:{} });
+  if(!r.ok){ showToast(r.error || 'ساخت فصل جدید ناموفق بود.', 'error'); return null; }
+  if(r.league) O.leagueView = r.league;
+  showToast(`فصل ${faNum(r.season)} شروع شد ✅`);
+  render();
+  return r;
+}
+
 /* گرفتن گزارش رسمی از سرور و افزودن آن به گزارش‌های بازی (برای پخش/ری‌پلی) */
 async function onlineFetchReportIntoReports(reportId){
   const r = await onlineFetch('/api/matches/' + encodeURIComponent(reportId));
@@ -253,13 +330,44 @@ async function openServerReport(reportId){
 
 /* ---------- جدول ---------- */
 function onlineTableHtml(lg){
+  const aiNames = {};
+  (lg.members || []).forEach(m=>{ if(m.ai) aiNames[m.clubName] = true; });
   const rows = (lg.table || []).map(t=>`<tr class="${t.name === ((onlineState().player||{}).clubName || state.clubName) ? 'me' : ''}">
-    <td>${faNum(t.rank)}</td><td class="team-name"><span class="mini-crest">${crestSVG(t.name)}</span>${escapeHtml(t.name)}</td>
+    <td>${faNum(t.rank)}</td><td class="team-name"><span class="mini-crest">${crestSVG(t.name)}</span>${escapeHtml(t.name)}${aiNames[t.name] ? ' <span class="muted" style="font-size:0.62rem;">🤖</span>' : ''}</td>
     <td>${faNum(t.played)}</td><td>${faNum(t.won)}</td><td>${faNum(t.drawn)}</td><td>${faNum(t.lost)}</td>
     <td>${faNum(t.gf)}</td><td>${faNum(t.ga)}</td><td><b>${faNum(t.pts)}</b></td></tr>`).join('');
   return `<table class="league al-table">
     <tr><th>#</th><th style="text-align:right;">تیم</th><th>بازی</th><th>ب.ب</th><th>م</th><th>ب.خ</th><th>گ.ز</th><th>گ.خ</th><th>امت</th></tr>
     ${rows || '<tr><td colspan="9" class="empty">هنوز تیمی نیست</td></tr>'}</table>`;
+}
+
+/* ---------- آمار جانبی لیگ (آقای گل، پاس‌گل، کلین‌شیت) ---------- */
+function onlineSideStatsHtml(lg){
+  const S = lg.sideStats || {};
+  const list = (arr)=> (arr && arr.length)
+    ? arr.slice(0,5).map((x,i)=>`<div class="row"><span>${faNum(i+1)}. ${escapeHtml(x.name)} <span class="muted">(${escapeHtml(x.club)})</span></span><b>${faNum(x.value)}</b></div>`).join('')
+    : '<div class="empty">هنوز آماری ثبت نشده</div>';
+  return `
+  <div class="card glass">
+    <h2><span class="dot"></span>آمار جانبی لیگ (فصل ${faNum(lg.season || 1)})</h2>
+    <div class="muted" style="font-size:0.72rem; margin-top:4px;">⚽ آقای گل</div>
+    ${list(S.scorers)}
+    <div class="muted" style="font-size:0.72rem; margin-top:10px;">🎯 پاس گل</div>
+    ${list(S.assists)}
+    <div class="muted" style="font-size:0.72rem; margin-top:10px;">🧤 کلین‌شیت</div>
+    ${list(S.cleanSheets)}
+  </div>`;
+}
+/* ---------- تاریخچه‌ی فصل‌ها ---------- */
+function onlineHistoryHtml(lg){
+  if(!lg.history || !lg.history.length) return '';
+  return `
+  <div class="card glass">
+    <h2><span class="dot"></span>تاریخچه‌ی لیگ</h2>
+    ${lg.history.slice().reverse().map(h=>`<div class="row">
+      <span>فصل ${faNum(h.season)} <span class="muted">🏆 ${escapeHtml(h.champion || '—')}</span></span>
+      <b style="font-size:0.7rem;">${h.topScorer ? '⚽ ' + escapeHtml(h.topScorer) : ''}</b></div>`).join('')}
+  </div>`;
 }
 
 /* ---------- صفحه‌ی «آنلاین» ---------- */
@@ -278,18 +386,37 @@ function renderOnline(){
       <b>${l.nextRound === null ? '🏁 تمام' : 'دور ' + faNum(l.nextRound+1)}</b>
     </div>`).join('') : '<div class="empty">هنوز در لیگی نیستی</div>';
 
+  const isOwner = lg ? lg.isOwner : false;
+  const win = lg ? (lg.window || {}) : {};
+  const myMember = lg ? (lg.members || []).find(m=> m.isMe) : null;
+  const windowLine = !lg ? '' : (win.open
+    ? `⏳ پنجره‌ی ثبت ترکیب باز است — تا ${faDateTime(win.closesAt)} (${faDuration((win.closesAt||0) - Date.now())} دیگر)`
+    : '🔒 پنجره‌ی ثبت ترکیب این هفته بسته شده؛ در اولین بازدید/بازی، هفته انجام می‌شود.');
   const leaguePanel = !lg ? '' : `
   <div class="card glass">
-    <h2><span class="dot"></span>${escapeHtml(lg.name)} <span class="muted" style="font-size:0.7rem;">شناسه: ${lg.id}</span></h2>
-    <div class="row"><span>تیم‌ها</span><b>${faNum(lg.teams)}</b></div>
-    <div class="row"><span>پیشرفت</span><b>${lg.nextRound === null ? 'تمام شد 🏁' : `دور ${faNum(lg.nextRound+1)} از ${faNum(lg.totalRounds)}`}</b></div>
-    ${lg.nextRound === null ? '' : `<button class="btn primary" style="width:100%; margin-top:8px;" ${O.busy?'disabled':''} onclick="onlineSimulateRound()">${O.busy ? 'در حال بازی…' : `بازی دور ${faNum(lg.nextRound+1)} (روی سرور) ⚽`}</button>`}
+    <h2><span class="dot"></span>${escapeHtml(lg.name)} <span class="muted" style="font-size:0.7rem;">شناسه: ${lg.id}${isOwner ? ' · میزبان تو' : ''}</span></h2>
+    <div class="row"><span>فصل</span><b>${faNum(lg.season || 1)}</b></div>
+    <div class="row"><span>تیم‌ها</span><b>${faNum(lg.teams)}${lg.aiCount ? ` <span class="muted">(${faNum(lg.aiCount)} تیم AI)</span>` : ''}</b></div>
+    <div class="row"><span>پیشرفت</span><b>${lg.nextRound === null ? 'تمام شد 🏁' : `هفته ${faNum(lg.nextRound+1)} از ${faNum(lg.totalRounds)}`}</b></div>
+    <div class="muted" style="font-size:0.74rem; margin-top:6px; line-height:1.8;">${windowLine}</div>
+    ${myMember ? `<div class="row"><span>ترکیب این هفته‌ی من</span><b>${myMember.submitted ? '✅ ثبت شده' : '❌ ثبت نشده'}</b></div>` : ''}
+    ${lg.nextRound === null ? '' : `
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        ${myMember && win.open ? `<button class="btn ghost small" style="flex:1;" ${O.busy?'disabled':''} onclick="onlineSubmitWeek()">ثبت ترکیب هفته 📝</button>` : ''}
+        <button class="btn primary small" style="flex:1;" ${O.busy?'disabled':''} onclick="onlineSimulateRound()">${O.busy ? 'در حال بازی…' : `بازی هفته ${faNum(lg.nextRound+1)} ⚽`}</button>
+      </div>`}
+    ${lg.nextRound === null && isOwner ? `<button class="btn primary" style="width:100%; margin-top:8px;" onclick="onlineNewSeason()">شروع فصل ${faNum((lg.season||1)+1)} 🏁</button>` : ''}
+    ${!lg.started && isOwner && lg.teams < 12 ? `<button class="btn ghost small" style="width:100%; margin-top:8px;" onclick="onlineFillAi(8)">پر کردن لیگ با تیم‌های AI 🤖</button>` : ''}
     <div style="display:flex; gap:8px; margin-top:8px;">
       <button class="btn ghost small" style="flex:1;" onclick="onlineShareLeague('${lg.id}', ${JSON.stringify(lg.name)})">ارسال شناسه به رفقا</button>
+      ${isOwner && lg.nextRound !== null ? `<button class="btn ghost small" style="flex:1;" onclick="onlineForceAdvance()">بستن پنجره و بازی فوری</button>` : ''}
       <button class="btn ghost small" style="flex:1;" onclick="onlineOpenLeague('${lg.id}')">تازه‌سازی</button>
     </div>
+    <p class="muted" style="font-size:0.66rem; margin-top:8px;">${win.friday ? 'بازی‌ها جمعه‌ها خودکار انجام می‌شود (پنجره تا پنجشنبه).' : 'بدون دکمه هم: به‌محض پایان پنجره، اولین بازدید هفته را بازی می‌کند.'}</p>
   </div>
   <div class="card glass"><h2><span class="dot"></span>جدول لیگ</h2>${onlineTableHtml(lg)}</div>
+  ${onlineSideStatsHtml(lg)}
+  ${onlineHistoryHtml(lg)}
   <div class="card glass"><h2><span class="dot"></span>برنامه و نتایج</h2>
     ${(lg.fixtures||[]).map((pairs, r)=>{
       const results = lg.results || {};
@@ -329,8 +456,12 @@ function renderOnline(){
     <label class="muted" style="font-size:0.72rem; display:block; margin-top:12px;">ساخت لیگ جدید</label>
     <div style="display:flex; gap:8px; margin-top:4px;">
       <input id="onNewLeague" placeholder="اسم لیگ (مثلاً: لیگ رفقا)" maxlength="26" style="flex:2;">
-      <button class="btn primary small" style="flex:1;" onclick="onlineCreateLeague((document.getElementById('onNewLeague')||{}).value)">بساز</button>
+      <button class="btn primary small" style="flex:1;" onclick="onlineCreateLeague((document.getElementById('onNewLeague')||{}).value, { fillAI: (document.getElementById('onFillAI')||{}).checked !== false })">بساز</button>
     </div>
+    <label class="muted" style="font-size:0.72rem; display:flex; align-items:center; gap:6px; margin-top:6px;">
+      <input type="checkbox" id="onFillAI" checked style="width:auto;"> با تیم‌های AI پر شود (تا تنها هم بازی کنی)
+    </label>
+    <p class="muted" style="font-size:0.66rem; margin-top:6px;">پیش‌فرض: ۸ تیمی. برای دموی سریع می‌توانی پنجره را کوتاه کنی — ولی از خود API.</p>
     <label class="muted" style="font-size:0.72rem; display:block; margin-top:12px;">ورود به لیگ رفیق (با شناسه)</label>
     <div style="display:flex; gap:8px; margin-top:4px;">
       <input id="onJoinLeague" placeholder="شناسه‌ی لیگ (مثل L3f8a1c)" style="flex:2; direction:ltr;">

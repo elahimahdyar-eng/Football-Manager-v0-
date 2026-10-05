@@ -119,7 +119,7 @@ const sleep = (ms)=> new Promise(r=> setTimeout(r, ms));
   check('سرور فهرست بازیکنان و فرمیشن را ذخیره کرد', up.squad && up.squad.players >= 11 && up.squad.formation === '4-4-2', JSON.stringify(up.squad));
 
   console.log('\n=== ۵) ساخت لیگ و دیدن جدول ===');
-  const lg = await A.run('onlineCreateLeague("لیگ آنلاین دربی")');
+  const lg = await A.run('onlineCreateLeague("لیگ آنلاین دربی", { fillAI: false })');
   check('لیگ ساخته شد و شناسه دارد', lg && lg.id && lg.teams === 1, lg && `${lg.id} / ${lg.teams} تیم`);
   const leagueId = lg.id;
   const view = await A.run(`onlineOpenLeague(${JSON.stringify(leagueId)}).then(v=>{render(); return v;})`);
@@ -190,6 +190,52 @@ const sleep = (ms)=> new Promise(r=> setTimeout(r, ms));
     typeof pageHtml === 'string' && pageHtml.indexOf('تمام شد') > 0, typeof pageHtml === 'string' ? pageHtml.length : 'نه رشته');
   check('صفحه‌ی آنلاین جدول و برنامه را نشان می‌دهد',
     typeof pageHtml === 'string' && pageHtml.indexOf('al-table') > 0 && pageHtml.indexOf('دور ۱') > 0);
+
+  console.log('\n=== ۹.۵) گام ۳ از دید کلاینت: هفته، AI، آمار جانبی، فصل جدید ===');
+  /* لیگ تازه از خود UI با تیم‌های AI */
+  const wl = await A.run('onlineCreateLeague("لیگ هفتگی من", { fillAI: true, fillTo: 8 })');
+  check('ساخت لیگ از UI با تیم‌های AI کار می‌کند', wl && wl.aiCount >= 6 && wl.teams === 8,
+    JSON.stringify({teams: wl && wl.teams, ai: wl && wl.aiCount}));
+  const wlId = wl.id;
+  await A.run(`onlineOpenLeague(${JSON.stringify(wlId)}).then(v=>{ uiMain='online'; uiSub=null; render(); return v; })`);
+  const page1 = A.run('document.getElementById("tabContent").innerHTML');
+  check('صفحه‌ی لیگ، نوار پنجره‌ی هفتگی را نشان می‌دهد', page1.indexOf('پنجره‌ی ثبت ترکیب') > 0);
+  check('دکمه‌ی «ثبت ترکیب هفته» دیده می‌شود', page1.indexOf('ثبت ترکیب هفته') > 0);
+  check('نشان تیم‌های AI در جدول هست', page1.indexOf('🤖') > 0);
+  check('کارت آمار جانبی ساخته می‌شود', page1.indexOf('آمار جانبی لیگ') > 0);
+
+  const subWeek = await A.run('onlineSubmitWeek()');
+  check('ثبت ترکیب هفته از UI انجام شد', subWeek && subWeek.ok === true && A.run('state.online.leagueView.mySubmitted') === true);
+  const page2 = A.run('renderOnline()');
+  check('بعد از ثبت، وضعیت «ثبت شده» نشان داده می‌شود', page2.indexOf('✅ ثبت شده') > 0);
+
+  /* بازی یک هفته با ۸ تیم ⇒ ۴ مسابقه */
+  const bigRound = await A.run('onlineSimulateRound()');
+  check('هفته‌ی ۸ تیمی ۴ مسابقه دارد', bigRound && bigRound.matches && bigRound.matches.length === 4,
+    JSON.stringify(bigRound && bigRound.matches && bigRound.matches.length));
+  const statsView = A.run('state.online.leagueView.sideStats');
+  check('آمار آقای گل بعد از بازی پر می‌شود', statsView.scorers.length > 0 && statsView.scorers[0].value >= 1,
+    JSON.stringify(statsView.scorers.slice(0,2)));
+  check('پاس گل و کلین‌شیت هم ثبت می‌شوند', Array.isArray(statsView.assists) && Array.isArray(statsView.cleanSheets));
+  check('جدول ۸ تیمی همه‌ی تیم‌ها بازی کرده‌اند',
+    A.run('state.online.leagueView.table.filter(t=>t.played>0).length') === 8);
+
+  /* فصل جدید از سمت میزبان بعد از تمام شدن فصل (۷ هفته) */
+  let g2 = 0;
+  while(g2 < 10){
+    const r = await A.run('onlineSimulateRound()');
+    g2++;
+    if(r && r.done) break;
+  }
+  const beforeNew = A.run('state.online.leagueView');
+  check('فصل ۸ تیمی در ۷ هفته تمام می‌شود و پرچم فصل جدید می‌آید',
+    beforeNew.nextRound === null && beforeNew.canNewSeason === true, JSON.stringify({next: beforeNew.nextRound, rounds: g2}));
+  const ns = await A.run('onlineNewSeason()');
+  check('فصل جدید از UI ساخته می‌شود', ns && ns.season === 2 && A.run('state.online.leagueView.season') === 2);
+  check('تاریخچه‌ی قهرمان فصل قبل نمایش داده می‌شود',
+    A.run('state.online.leagueView.history.length') === 1 && A.run('renderOnline()').indexOf('تاریخچه‌ی لیگ') > 0);
+  check('آمار جانبی فصل جدید از صفر شروع می‌شود',
+    A.run('state.online.leagueView.sideStats.scorers.length') === 0);
 
   console.log('\n=== ۱۰) خروج و پاک‌سازی ===');
   A.run('_confirmCb = ()=> { setOnlineToken(""); state.online.player = null; }; _confirmRun();');
