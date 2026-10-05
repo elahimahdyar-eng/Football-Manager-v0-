@@ -398,6 +398,158 @@ check('اعمال خودکار و بازگردانی چیدمان منطقی ا�
 run(`deleteLineupPreset('league'); _confirmRun();`);
 check('حذف چیدمان با تأیید انجام می‌شود', run(`state.lineupPresets.league`) === null);
 
+console.log('\n=== ۱۷.۵) لیگ رفقا (گام ۱ آنلاین) ===');
+/* تیم دوست ساختگی: کد چالش کامل (همان قراردادی که کاربر می‌فرستد) */
+function fakeTeamCode(name, atk){
+  const pos = ['GK','DF','DF','DF','DF','MF','MF','MF','MF','FW','FW'];
+  const p = pos.map((x,i)=>['بازیکن '+name+' '+(i+1), x, atk + (i%5)]);
+  const json = JSON.stringify({ v:1, c:name, mg:'رفیق', a:atk, d:atk-4, f:88, s:76, m:74, fm:'4-4-2', st:'balanced', p });
+  return run(`b64urlEncode(${JSON.stringify(json)})`);
+}
+const frA = fakeTeamCode('آبی‌پوشان', 72);
+const frB = fakeTeamCode('سرخ‌ها', 68);
+const ARR_A = JSON.stringify([frB, frA]);
+check('کد تیم رفیق معتبر است', run(`!!decodeChallengeCode(${JSON.stringify(frA)})`));
+
+const lg = run(`(()=>{ const p=buildLeaguePayload('لیگ محله', ${ARR_A}); return { names:p.m.map(x=>x.c), n:p.m.length, sorted: (p.m.map(x=>x.c).join('|') === p.m.map(x=>x.c).slice().sort().join('|')) }; })()`);
+check('کد لیگ ساخته شد (من + ۲ رفیق)', lg.n === 3, lg.names.join(' / '));
+check('اعضای لیگ همیشه مرتب‌اند (قطعی روی هر دستگاه)', lg.sorted);
+
+const lgCode = run(`makeLeagueCode('لیگ محله', ${ARR_A})`);
+const LG = JSON.stringify(lgCode);
+check('کد لیگ قابل decode است', run(`!!decodeLeagueCode(${JSON.stringify(lgCode)})`), lgCode.length + ' کاراکتر');
+check('کد لیگ خراب رد می‌شود', run(`decodeLeagueCode('چرند') === null && decodeLeagueCode('') === null && decodeLeagueCode('x') === null`));
+const lgCodeRev = run(`makeLeagueCode('لیگ محله', ${JSON.stringify([frA, frB])})`);
+check('کد لیگ مستقل از ترتیب ورودی است (دو دستگاه، یک لیگ)', lgCode === lgCodeRev);
+
+/* برنامه‌ی مسابقات */
+const fx = run(`leagueFixtures(decodeLeagueCode(${LG}))`);
+check('۳ تیم ⇒ ۳ دور', fx.length === 3, fx.length);
+check('هر دور هر تیم دقیقاً یک بازی دارد', fx.every(rd=>{
+  const seen = []; rd.forEach(([h,a])=>{ seen.push(h,a); });
+  return seen.length === 2 && new Set(seen).size === 2;
+}), JSON.stringify(fx));
+check('هر جفت فقط یک بار روبه‌رو می‌شود', (()=>{
+  const seen = new Set(); let ok = true;
+  fx.forEach(rd=>rd.forEach(([h,a])=>{ const k=Math.min(h,a)+'-'+Math.max(h,a); if(seen.has(k)) ok=false; seen.add(k); }));
+  return ok && seen.size === 3;
+})());
+check('هیچ تیمی با خودش بازی نمی‌کند', fx.every(rd=>rd.every(([h,a])=>h!==a)));
+
+/* ۴ تیم ⇒ ۳ دور، ۶ مسابقه، هر تیم هر دور یک بازی */
+const frC = fakeTeamCode('زردها', 70), frD = fakeTeamCode('سبزها', 66);
+const fx4 = run(`(()=>{
+  const p = buildLeaguePayload('لیگ ۴ نفره', [${JSON.stringify(frA)}, ${JSON.stringify(frB)}, ${JSON.stringify(frC)}, ${JSON.stringify(frD)}]);
+  const rounds = leagueFixtures(p);
+  const perRound = rounds.every(rd=>{ const seen=[]; rd.forEach(([h,a])=>seen.push(h,a)); return seen.length===4 && new Set(seen).size===4; });
+  const total = rounds.reduce((a,rd)=>a+rd.length,0);
+  const played = {};
+  const results = {};
+  for(let r=0;r<rounds.length;r++) simulateLeagueRound(p,r).forEach(m=>{ results[m.key]={h:m.report.homeGoals,a:m.report.awayGoals,s:m.seed,hi:m.hi,ai:m.ai,r}; });
+  const table = leagueTable(p, results);
+  table.forEach(t=> played[t.name]=t.played);
+  return { teams:p.m.length, rounds:rounds.length, total, perRound, played, verifyBad: verifyLeagueResults(p, results).bad.length }; })()`);
+check('لیگ ۵ تیمی ⇒ ۵ دور و ۱۰ مسابقه و هر تیم ۴ بازی', fx4.teams===5 && fx4.rounds===5 && fx4.total===10 && fx4.perRound && fx4.played['سبزها']===4, JSON.stringify(fx4));
+
+/* قطعیت و یکتایی seed */
+const sim1 = run(`simulateLeagueRound(decodeLeagueCode(${LG}), 0).map(m=>({k:m.key,h:m.report.homeGoals,a:m.report.awayGoals,s:m.seed}))`);
+const sim2 = run(`simulateLeagueRound(decodeLeagueCode(${LG}), 0).map(m=>({k:m.key,h:m.report.homeGoals,a:m.report.awayGoals,s:m.seed}))`);
+check('شبیه‌سازی یک دور کاملاً قطعی است', JSON.stringify(sim1) === JSON.stringify(sim2), JSON.stringify(sim1.map(x=>x.h+'-'+x.a)));
+const seeds = run(`(()=>{ const p=decodeLeagueCode(${LG}); const s=new Set(); [0,1,2].forEach(r=>simulateLeagueRound(p,r).forEach(m=>s.add(m.seed))); return {n:s.size, list:Array.from(s)}; })()`);
+check('seed هر مسابقه یکتاست (۳ مسابقه ⇒ ۳ seed)', seeds.n === 3, seeds.n);
+
+/* جریان کامل لیگ ۳ تیمی: بازی همه‌ی دورها */
+const full = run(`(()=>{
+  const p = decodeLeagueCode(${LG}); const results = {};
+  for(let r=0;r<leagueRoundCount(p);r++) simulateLeagueRound(p, r).forEach(m=>{
+    results[m.key] = { h:m.report.homeGoals, a:m.report.awayGoals, s:m.seed, hi:m.hi, ai:m.ai, r };
+  });
+  const table = leagueTable(p, results), verify = verifyLeagueResults(p, results);
+  return { matches:Object.keys(results).length, played:table.reduce((s,t)=>s+t.played,0),
+    bad:verify.bad.length, total:verify.total, ptsSum:table.reduce((s,t)=>s+t.pts,0),
+    wins:table.reduce((s,t)=>s+t.won,0), draws:table.reduce((s,t)=>s+t.drawn,0),
+    rankOk: table.every((t,i)=> i===0 || table[i-1].pts >= t.pts) };
+})()`);
+check('لیگ ۳ تیمی ⇒ ۳ مسابقه و هر تیم ۲ بازی', full.matches === 3 && full.played === 6, JSON.stringify({m:full.matches, p:full.played}));
+check('همه‌ی نتایج از روی seed بازتولید و تأیید شدند', full.bad === 0 && full.total === 3, JSON.stringify(full));
+check('امتیاز کل = ۳×برد + مساوی (هر تساوی ۱ امتیاز به هر تیم)', full.ptsSum === 3*full.wins + full.draws, JSON.stringify({pts:full.ptsSum,w:full.wins,d:full.draws}));
+check('جدول درست مرتب می‌شود (امتیاز نزولی)', full.rankOk);
+
+/* ضدتقلب: نتیجه‌ی دست‌کاری‌شده باید لو برود */
+const tampered = run(`(()=>{
+  const p = decodeLeagueCode(${LG}); const m = simulateLeagueRound(p, 0)[0];
+  const res = {}; res[m.key] = { h:m.report.homeGoals+3, a:m.report.awayGoals, s:m.seed, hi:m.hi, ai:m.ai, r:0 };
+  return verifyLeagueResults(p, res).bad;
+})()`);
+check('نتیجه‌ی دست‌کاری‌شده رد می‌شود', tampered.length === 1 && tampered[0].why === 'result', JSON.stringify(tampered));
+
+/* دست‌کاری seed هم باید لو برود */
+const tamperedSeed = run(`(()=>{
+  const p = decodeLeagueCode(${LG}); const m = simulateLeagueRound(p, 0)[0];
+  const res = {}; res[m.key] = { h:m.report.homeGoals, a:m.report.awayGoals, s:m.seed+1, hi:m.hi, ai:m.ai, r:0 };
+  return verifyLeagueResults(p, res).bad;
+})()`);
+check('seed دست‌کاری‌شده رد می‌شود', tamperedSeed.length === 1 && tamperedSeed[0].why === 'seed', JSON.stringify(tamperedSeed));
+
+/* تغییر قدرت تیم، seed را عوض نمی‌کند (نتایج گذشته باطل نمی‌شوند) */
+const seedStable = run(`(()=>{
+  const p1 = decodeLeagueCode(${LG}); const p2 = decodeLeagueCode(${LG});
+  const s1 = leagueMatchSeed(p1, 0, 0, 1);
+  p2.m.sort((a,b)=> String(a.c) < String(b.c) ? -1 : 1);
+  p2.m[0].a = 99; p2.m[0].p[0][2] = 99;
+  return { s1, s2: leagueMatchSeed(p2, 0, 0, 1) };
+})()`);
+check('seed از قدرت تیم مستقل است (تغییر ترکیب، نتایج گذشته را باطل نمی‌کند)', seedStable.s1 === seedStable.s2, JSON.stringify(seedStable));
+
+/* جریان UI: صفحه‌ی ساخت ⇒ ساخت لیگ ⇒ بازی دور ⇒ جدول */
+const flow = run(`(()=>{
+  state.asyncLeague = null;
+  uiMain='league'; uiSub='async'; render();
+  const setupHtml = document.getElementById('tabContent').innerHTML;
+  const joined = startAsyncLeague('لیگ فلو', [${JSON.stringify(frA)}, ${JSON.stringify(frB)}]);
+  const before = leagueNextRound(asyncLeaguePayload(), asyncLeagueResults());
+  playNextLeagueRound(); stopLive(); closeAllOverlays();
+  const resAfter = Object.keys(asyncLeagueResults()).length;
+  const after = leagueNextRound(asyncLeaguePayload(), asyncLeagueResults());
+  const tableHtml = leagueTableHtml(asyncLeaguePayload(), leagueTable(asyncLeaguePayload(), asyncLeagueResults()));
+  leaveAsyncLeague(); _confirmRun();
+  return { hasSetup: setupHtml.indexOf('ساخت لیگ') > 0, joined: !!joined, members: joined ? joined.m.length : 0,
+    before, resAfter, after, tableOk: tableHtml.indexOf('al-table') > 0, cleared: state.asyncLeague === null };
+})()`);
+check('صفحه‌ی ساخت لیگ رندر می‌شود', flow.hasSetup);
+check('لیگ ساخته شد (۳ تیم) و وارد تب لیگ رفقا شد', flow.joined && flow.members === 3, JSON.stringify({m:flow.members}));
+check('بازی دور اول، نتایجش را ذخیره کرد و دور جلو رفت', flow.before === 0 && flow.resAfter === 1 && flow.after === 1, JSON.stringify({res:flow.resAfter, from:flow.before, to:flow.after}));
+check('جدول HTML لیگ رفقا ساخته می‌شود', flow.tableOk);
+check('خروج از لیگ با تأیید انجام می‌شود', flow.cleared);
+
+/* بازی همه‌ی دورها تا پایان + وضعیت قهرمانی */
+const finish = run(`(()=>{
+  state.asyncLeague = null;
+  startAsyncLeague('لیگ پایان', [${JSON.stringify(frA)}, ${JSON.stringify(frB)}]);
+  let guard = 0;
+  while(leagueNextRound(asyncLeaguePayload(), asyncLeagueResults()) !== null && guard < 10){
+    playNextLeagueRound(); stopLive(); closeAllOverlays(); guard++;
+  }
+  const payload = asyncLeaguePayload();
+  uiSub='async'; render();
+  const html = document.getElementById('tabContent').innerHTML;
+  const verify = verifyLeagueResults(payload, asyncLeagueResults());
+  const table = leagueTable(payload, asyncLeagueResults());
+  const out = { guard, done: leagueNextRound(payload, asyncLeagueResults()) === null,
+    hasEnd: html.indexOf('لیگ تمام شد') > 0, bad: verify.bad.length, champion: table[0].name,
+    myRank: table.findIndex(t=>t.isUser)+1 };
+  leaveAsyncLeague(); _confirmRun();
+  return out;
+})()`);
+check('همه‌ی ۳ دور تا پایان قابل بازی‌اند', finish.done && finish.guard === 3, JSON.stringify({guard:finish.guard}));
+check('بعد از پایان، قهرمان اعلام می‌شود', finish.hasEnd && !!finish.champion, finish.champion);
+check('همه‌ی نتایج لیگ تأیید می‌شوند', finish.bad === 0, finish.bad);
+check('کاربر در جدول رتبه دارد', finish.myRank >= 1 && finish.myRank <= 3, finish.myRank);
+
+const dashCard = run(`(()=>{ startAsyncLeague('لیگ داشبورد', [${JSON.stringify(frA)}, ${JSON.stringify(frB)}]);
+  uiMain='home'; render(); const h = document.getElementById('tabContent').innerHTML; leaveAsyncLeague(); _confirmRun(); return h.indexOf('لیگ رفقا') > 0; })()`);
+check('کارت لیگ رفقا در داشبورد دیده می‌شود', dashCard);
+
 console.log('\n=== ۱۷) رندر همه‌ی تب‌ها ===');
 run(`startGame()`);
 const NAV = run('NAV');

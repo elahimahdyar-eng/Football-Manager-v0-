@@ -28,6 +28,7 @@ function render(){
   else if(uiMain==="market" && uiSub==="buy") c.innerHTML = renderMarketBuy();
   else if(uiMain==="market" && uiSub==="sell") c.innerHTML = renderMarketSell();
   else if(uiMain==="league" && uiSub==="table") c.innerHTML = renderLeagueTable();
+  else if(uiMain==="league" && uiSub==="async") c.innerHTML = renderAsyncLeague();
   else if(uiMain==="league" && uiSub==="cup") c.innerHTML = renderCup();
   else if(uiMain==="league" && uiSub==="stats") c.innerHTML = renderSeasonStats();
   else if(uiMain==="league" && uiSub==="reports") c.innerHTML = renderReports();
@@ -149,6 +150,7 @@ function renderDashboard(){
     <button class="btn ghost" style="width:100%;" onclick="spinLucky()" ${state.lastLuckyWeek===state.week?'disabled':''}>${state.lastLuckyWeek===state.week?'این هفته چرخوندی ✓':'چرخوندن 🎡'}</button>
   </div>
   ${lastReportCardHtml()}
+  ${asyncLeagueCardHtml()}
   ${challengeCardHtml()}
   <div class="card glass">
     <h2><span class="dot"></span>آخرین اخبار</h2>

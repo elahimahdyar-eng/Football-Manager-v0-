@@ -175,7 +175,7 @@ function openReport(id){
   const oppName = u===0 ? r.away : r.home;
   const myName = state.clubName;
   const won = myGoals > oppGoals, lost = myGoals < oppGoals;
-  const comp = r.competition === 'cup' ? 'جام حذفی' : (r.competition === 'friendly' ? 'بازی دوستانه' : 'لیگ');
+  const comp = r.competition === 'cup' ? 'جام حذفی' : (r.competition === 'friendly' ? 'بازی دوستانه' : (r.competition === 'async-league' ? 'لیگ رفقا' : 'لیگ'));
   const best = r.bestPlayer;
   const bestIsMine = best ? ((best.side === 'home') === (u === 0)) : false;
   document.getElementById('genericModal').innerHTML = `

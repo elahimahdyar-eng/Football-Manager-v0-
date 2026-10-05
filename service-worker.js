@@ -9,7 +9,7 @@
      پس‌زمینه، برای بارگذاری سریع و کارکرد کامل آفلاین.
    ============================================================ */
 
-const CACHE_NAME = "football-manager-v8";
+const CACHE_NAME = "football-manager-v9";
 
 const CORE_FILES = [
   "./",
@@ -26,6 +26,7 @@ const CORE_FILES = [
   "./js/replay.js",
   "./js/livematch.js",
   "./js/challenge.js",
+  "./js/league.js",
   "./js/save.js",
   "./js/sim.js",
   "./js/boot.js",

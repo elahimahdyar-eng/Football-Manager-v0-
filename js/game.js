@@ -15,7 +15,7 @@ const NAV = [
     {key:"buy", label:"خرید بازیکن"}, {key:"sell", label:"فروش بازیکن"}
   ]},
   {key:"league", label:"لیگ", icon:"🏆", subs:[
-    {key:"table", label:"جدول"}, {key:"cup", label:"جام حذفی"}, {key:"stats", label:"آمار بازیکنان"}, {key:"reports", label:"گزارش‌ها"}, {key:"news", label:"اخبار"}
+    {key:"table", label:"جدول"}, {key:"async", label:"لیگ رفقا"}, {key:"cup", label:"جام حذفی"}, {key:"stats", label:"آمار بازیکنان"}, {key:"reports", label:"گزارش‌ها"}, {key:"news", label:"اخبار"}
   ]},
   {key:"settings", label:"باشگاه", icon:"⚙️", subs:[
     {key:"club", label:"امکانات"}, {key:"achievements", label:"دستاوردها"}, {key:"prefs", label:"تنظیمات"}, {key:"save", label:"ذخیره"}, {key:"load", label:"بارگذاری"}

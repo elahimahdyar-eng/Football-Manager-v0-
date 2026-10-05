@@ -78,6 +78,8 @@ function normalizeState(s){
       return r;
     });
   if(s.lastReportId === undefined) s.lastReportId = s.matchReports[0] ? s.matchReports[0].id : null;
+  /* لیگ رفقا (گام ۱ آنلاین): فقط اگر کد لیگش سالم باشد نگه داشته می‌شود */
+  if(s.asyncLeague && !validAsyncLeague(s.asyncLeague)) s.asyncLeague = null;
   if(!Array.isArray(s.transferMarket) || !s.transferMarket.length) s.transferMarket = genMarket();
 
   /* آمار نامعتبر بازیکن‌ها را ترمیم کن */
@@ -137,6 +139,23 @@ function normalizeState(s){
 }
 
 /* اعتبارسنجی چیدمان ذخیره‌شده (بعد از بارگذاری) */
+function validAsyncLeague(L){
+  if(!L || typeof L.code !== 'string' || L.code.length < 8) return false;
+  if(typeof decodeLeagueCode !== 'function') return false;
+  const payload = decodeLeagueCode(L.code);
+  if(!payload) return false;
+  if(!L.results || typeof L.results !== 'object') L.results = {};
+  Object.keys(L.results).forEach(k=>{
+    const r = L.results[k];
+    const ok = r && ['h','a','s','hi','ai','r'].every(f=>typeof r[f] === 'number') &&
+      r.h >= 0 && r.a >= 0 && r.h < 40 && r.a < 40 &&
+      r.hi >= 0 && r.ai >= 0 && r.hi < payload.m.length && r.ai < payload.m.length && r.hi !== r.ai;
+    if(!ok) delete L.results[k];
+  });
+  L.name = payload.n;
+  L.memberCount = payload.m.length;
+  return true;
+}
 function validPreset(preset, st){
   if(!preset || !FORMATIONS[preset.formation] || !Array.isArray(preset.slots)) return false;
   if(preset.slots.length !== 11) return false;

@@ -272,3 +272,15 @@
   padding:5px 8px; border-radius:8px; cursor:pointer; }
 .lc-sp.on{ background:var(--grad-brand); color:#04141a; font-weight:800; }
 .live-modal .confetti-wrap{ position:absolute; inset:0; }
+
+/* ============ لیگ رفقا (گام ۱ آنلاین: لیگ با کد) ============ */
+.al-round{border:1px solid var(--line); border-radius:14px; padding:8px 10px; margin-top:8px; background:rgba(255,255,255,0.02);}
+.al-round.done{opacity:0.86;}
+.al-round.next{border-color:var(--emerald); box-shadow:0 0 0 1px rgba(52,211,153,0.25) inset;}
+.al-round-h{display:flex; justify-content:space-between; align-items:center; font-size:0.74rem; color:var(--muted); margin-bottom:4px;}
+.al-match{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 8px; border-radius:10px; font-size:0.76rem;}
+.al-match.mine{background:rgba(34,211,238,0.10);}
+.al-match[onclick]:hover{background:rgba(255,255,255,0.06); cursor:pointer;}
+.al-me{background:rgba(34,211,238,0.10); border-radius:10px; padding-left:6px; padding-right:6px;}
+.al-table td, .al-table th{font-size:0.72rem;}
+.al-table .mini-crest{width:16px; height:16px; margin-left:4px;}
