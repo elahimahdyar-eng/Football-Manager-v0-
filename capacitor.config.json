@@ -1,0 +1,23 @@
+{
+  "appId": "com.managerteam.football",
+  "appName": "مدیر تیم",
+  "webDir": ".",
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": ["*"]
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": false,
+      "androidScaleType": "CENTER_CROP",
+      "splashFullScreen": true,
+      "splashImmersive": true,
+      "showSpinner": false,
+      "backgroundColor": "#080e1a"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#080e1a"
+  }
+  }
+}
