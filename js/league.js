@@ -66,41 +66,22 @@ function decodeLeagueCode(code){
 /* شناسه‌ی لیگ: فقط از نام لیگ و نام باشگاه‌ها (نه قدرت تیم‌ها)
    ⇒ اگر کسی ترکیبش را عوض کند، نتایج گذشته باطل نمی‌شوند */
 function leagueIdOf(payload){
-  return engineHash('league:' + payload.n + '|' + payload.m.map(p=>p.c).join('|') + '|' + LEAGUE_VERSION);
+  return leagueIdFromNames(payload.n, payload.m.map(p=>p.c));
 }
 
 /* ---------- برنامه‌ی مسابقات (round-robin قطعی) ---------- */
 
 /* هر کس یک بار با هر کس ⇒ n-1 دور (برای n زوج)، n دور (برای n فرد) */
 function leagueFixtures(payload){
-  const n = payload.m.length;
-  const idx = [];
-  for(let i=0;i<n;i++) idx.push(i);
-  if(n % 2) idx.push(-1);           /* BYE برای تعداد فرد */
-  const N = idx.length, rounds = [];
-  for(let r=0; r<N-1; r++){
-    const pairs = [];
-    for(let i=0;i<N/2;i++){
-      const a = idx[i], b = idx[N-1-i];
-      if(a === -1 || b === -1) continue;
-      const home = (r % 2) ? b : a;
-      const away = (r % 2) ? a : b;
-      pairs.push([home, away]);
-    }
-    rounds.push(pairs);
-    idx.splice(1, 0, idx.pop());    /* چرخش دایره‌ای: نفر اول ثابت */
-  }
-  return rounds;
+  return leagueFixturesFromCount(payload.m.length);
 }
-function leagueRoundCount(payload){ return leagueFixtures(payload).length; }
+function leagueRoundCount(payload){ return leagueRoundCountFromCount(payload.m.length); }
 
 /* seed هر مسابقه: از نام‌ها (مرتب‌شده) + شماره‌ی دور ⇒ قابل پیش‌بینی ولی قابل انتخاب نیست */
 function leagueMatchSeed(payload, round, hi, ai){
-  const A = String(payload.m[hi].c), B = String(payload.m[ai].c);
-  const [x, y] = A < B ? [A, B] : [B, A];
-  return engineHash('league:' + leagueIdOf(payload) + ':' + round + ':' + x + '|' + y);
+  return leagueSeedFrom(leagueIdOf(payload), round, payload.m[hi].c, payload.m[ai].c);
 }
-function leagueKey(round, hi, ai){ return round + ':' + hi + ':' + ai; }
+function leagueKey(round, hi, ai){ return leagueKeyOf(round, hi, ai); }
 /* ترتیب canonical یک جفت: همیشه «میزی» اول ذخیره می‌شود */
 function leaguePairKey(round, a, b){ return (a < b) ? leagueKey(round, a, b) : leagueKey(round, b, a); }
 
@@ -131,43 +112,23 @@ function simulateLeagueRound(payload, round){
 
 /* ---------- جدول ---------- */
 function leagueTable(payload, results){
-  const rows = payload.m.map((p, i)=>({
-    i, name: p.c, manager: p.mg || '', isUser: p.c === state.clubName,
-    played:0, won:0, drawn:0, lost:0, gf:0, ga:0, gd:0, pts:0
-  }));
-  Object.keys(results || {}).forEach(k=>{
-    const r = results[k];
-    if(!r || !rows[r.hi] || !rows[r.ai]) return;
-    const H = rows[r.hi], A = rows[r.ai];
-    H.played++; A.played++;
-    H.gf += r.h; H.ga += r.a;
-    A.gf += r.a; A.ga += r.h;
-    if(r.h > r.a){ H.won++; A.lost++; H.pts += 3; }
-    else if(r.h < r.a){ A.won++; H.lost++; A.pts += 3; }
-    else { H.drawn++; A.drawn++; H.pts++; A.pts++; }
+  /* جدول محاسبه‌ی مشترک (league-core) + اطلاعات نمایشی مخصوص کلاینت */
+  const rows = leagueTableFromNames(payload.m.map(p=>p.c), results);
+  rows.forEach(r=>{
+    const p = payload.m[r.i];
+    r.manager = p ? (p.mg || '') : '';
+    r.isUser = r.name === state.clubName;
   });
-  rows.forEach(r=> r.gd = r.gf - r.ga);
-  /* مرتب‌سازی قطعی: امتیاز، تفاضل، گل زده، سپس نام بایتی */
-  rows.sort((a,b)=> b.pts - a.pts || b.gd - a.gd || b.gf - a.gf ||
-    (a.name < b.name ? -1 : (a.name > b.name ? 1 : 0)));
-  rows.forEach((r,i)=> r.rank = i + 1);
   return rows;
 }
 
 /* دور بعدی که کامل بازی نشده (یا null اگر لیگ تمام شده) */
 function leagueNextRound(payload, results){
-  const rounds = leagueFixtures(payload);
-  for(let r=0;r<rounds.length;r++){
-    const done = rounds[r].every(([hi,ai])=> results && results[leagueKey(r, hi, ai)]);
-    if(!done) return r;
-  }
-  return null;
+  return leagueNextRoundFrom(payload.m.length, results);
 }
 /* آیا دور r کامل بازی شده؟ */
 function leagueRoundDone(payload, results, r){
-  const rounds = leagueFixtures(payload);
-  if(!rounds[r]) return false;
-  return rounds[r].every(([hi,ai])=> results && results[leagueKey(r, hi, ai)]);
+  return leagueRoundComplete(payload.m.length, results, r);
 }
 
 /* ---------- تأیید صحت: بازتولید همه‌ی نتایج از seed ---------- */

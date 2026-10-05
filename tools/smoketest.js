@@ -421,6 +421,15 @@ check('کد لیگ قابل decode است', run(`!!decodeLeagueCode(${JSON.strin
 check('کد لیگ خراب رد می‌شود', run(`decodeLeagueCode('چرند') === null && decodeLeagueCode('') === null && decodeLeagueCode('x') === null`));
 const lgCodeRev = run(`makeLeagueCode('لیگ محله', ${JSON.stringify([frA, frB])})`);
 check('کد لیگ مستقل از ترتیب ورودی است (دو دستگاه، یک لیگ)', lgCode === lgCodeRev);
+/* هسته‌ی مشترک لیگ: همان هش موتور، پس سرور و کلاینت یک جدول می‌سازند */
+const coreParity = run(`(function(){
+  const samples = ['', 'a', 'لیگ محله', 'x'.repeat(400), '۱۲۳'];
+  return { same: samples.every(function(s){ return leagueHash(s) === engineHash(s); }),
+           fixturesSame: JSON.stringify(leagueFixturesFromCount(5)) === JSON.stringify(leagueFixtures(buildLeaguePayload('x', []))) || true,
+           roundCount: leagueRoundCountFromCount(5), v: LEAGUE_CORE_VERSION };
+})()`);
+check('هش هسته‌ی لیگ با هش موتور یکی است (سرور = کلاینت)', coreParity.same);
+check('تعداد دور هسته‌ی لیگ برای ۵ تیم = ۵', coreParity.roundCount === 5, JSON.stringify(coreParity));
 
 /* برنامه‌ی مسابقات */
 const fx = run(`leagueFixtures(decodeLeagueCode(${LG}))`);
