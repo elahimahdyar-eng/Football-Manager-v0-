@@ -1,13 +1,14 @@
 /* ============================================================
    sw-app.js — Service Worker for PWA (مدیر تیم)
    ============================================================ */
-const CACHE_NAME = 'manager-v4';
+const CACHE_NAME = 'manager-v6';
 const STATIC_ASSETS = [
   './index.html',
   './css/app.css',
   './js/app.js',
   './js/util.js',
   './js/svg.js',
+  './js/facegen.js',
   './js/assets.js',
   './js/net.js',
   './js/live.js',

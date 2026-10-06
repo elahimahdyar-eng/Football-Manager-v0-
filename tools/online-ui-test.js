@@ -39,6 +39,7 @@ function check(label, cond, extra){
   else { failed++; console.log(`  ❌ ${label}${extra !== undefined ? '  →  ' + extra : ''}`); }
 }
 function warn(msg){ warnings.push(msg); }
+const viewSprite = {};     /* حجم اسپرایت چهره‌ها در هر نما (برای سنجش سبکی موبایل) */
 
 /* انتظار برای یک شرط داخل vm (مثل «بوت تمام شد») */
 let ACTIVE_CTX = null;
@@ -299,7 +300,9 @@ async function runScenario(){
   const renderTab = (tab, sub)=>{
     B.run(`ST.tab = ${JSON.stringify(tab)}; ST.sub = ${JSON.stringify(sub)}; APP.render();`);
     const html = B.run(`document.getElementById('gameMain').innerHTML`);
-    views.push({ name: tab + (sub ? '/' + sub : ''), html });
+    const key = tab + (sub ? '/' + sub : '');
+    viewSprite[key] = B.run(`(function(){ const el = document.getElementById('faceSprite'); return el && el.innerHTML ? el.innerHTML.length : 0; })()`);
+    views.push({ name: key, html });
     return html;
   };
   const home = renderTab('home');
@@ -307,7 +310,7 @@ async function runScenario(){
   const teamLineup = renderTab('team', 'lineup');
   check('ترکیب: زمین، بازیکنان و نیمکت رندر می‌شود', teamLineup.includes('pitch-line') && teamLineup.includes('pdot'), teamLineup.length);
   const teamSquad = renderTab('team', 'squad');
-  check('فهرست: کارت بازیکنان با چهره', teamSquad.includes('prow') && teamSquad.includes('assets/faces'), teamSquad.length);
+  check('فهرست: کارت بازیکنان با چهره‌ی SVG', teamSquad.includes('prow') && teamSquad.includes('face-'), teamSquad.length);
   const teamTrain = renderTab('team', 'train');
   check('تمرین: چهار جلسه‌ی تمرین', (teamTrain.match(/APP.train\(/g) || []).length >= 4);
   const market = renderTab('market');
@@ -318,6 +321,11 @@ async function runScenario(){
   check('باشگاه: کارنامه + هویت باشگاه + تنظیمات', club.includes('کارنامه') && club.includes('jersey-svg') && club.includes('آدرس سرور'), club.length);
   const leagueEmpty = renderTab('league');
   check('لیگ: خالی است ولی فرم ساخت لیگ دارد', leagueEmpty.includes('ساخت لیگ'), leagueEmpty.length);
+  /* چهره‌ها: هر بازیکن یک چهره‌ی اختصاصی (اینجا اسکواد در دسترس است) */
+  const faceStats = JSON.parse(B.run(`(function(){
+    const ids = (ST.squad.players || []).map(p=> faceSymbolId(p.id, 'sm', APP.myKit(), p.age));
+    return JSON.stringify({ total: ids.length, unique: new Set(ids).size });
+  })()`));
 
   console.log('\n=== ۴) لیگ آنلاین: ساخت، ثبت ترکیب، بازی هفته ===');
   await B.run(`APP.doCreateLeague('لیگ محله')`);
@@ -434,18 +442,23 @@ async function runScenario(){
   }
   check('هیچ کلاس بدون استایلی در رابط کاربری نماد (بدون CSS نمانده)', realMissing.length === 0, realMissing.length);
 
-  console.log('\n=== ۱۲) سلامتی تصاویر (چهره‌ها) ===');
-  const faceRefs = new Set();
+  console.log('\n=== ۱۲) چهره‌ی بازیکنان (تولید رویه‌ای، بدون تصویر) ===');
   const allHtml = views.map(v=> v.html).join('\n');
-  ([...allHtml.matchAll(/src="\.\/(assets\/faces\/[^"]+)"/g)]).forEach(x=> faceRefs.add(x[1]));
-  check('چهره‌ها در رابط کاربری استفاده شده‌اند', faceRefs.size > 0, faceRefs.size);
-  let missingFiles = 0;
-  faceRefs.forEach(rel=>{ if(!fs.existsSync(path.join(ROOT, rel))) missingFiles++; });
-  check('همه‌ی فایل‌های چهره روی دیسک موجودند', missingFiles === 0, missingFiles + ' فایل گم‌شده');
-  const thumbs = fs.existsSync(path.join(ROOT, 'assets/faces/thumbs'));
-  check('نسخه‌ی بندانگشتی چهره‌ها برای موبایل ساخته شده', thumbs);
-  const faceBytes = faceRefs.size ? [...faceRefs].reduce((s, rel)=> s + fs.statSync(path.join(ROOT, rel)).size, 0) : 0;
-  check('حجم چهره‌های استفاده‌شده برای موبایل سبک است (< 400KB)', faceBytes < 400 * 1024, Math.round(faceBytes / 1024) + 'KB');
+  const externalFaces = [...allHtml.matchAll(/assets\/faces\//g)].length;
+  check('هیچ تصویر چهره‌ای از دیسک بارگذاری نمی‌شود', externalFaces === 0, externalFaces);
+  check('چهره‌ها به‌صورت SVG درون‌خطی رندر می‌شوند', /face-svg|face-svg|<symbol/.test(allHtml) || allHtml.includes('face-'));
+  const spriteHtml = B.run(`(document.getElementById('faceSprite')||{innerHTML:''}).innerHTML`);
+  const symbols = (spriteHtml.match(/<symbol /g) || []).length;
+  check('چهره‌های نما در <symbol> ثبت می‌شوند', symbols >= 11, symbols + ' symbol');
+  const uses = (allHtml.match(/<use href="#/g) || []).length;
+  check('چهره‌ها در نماها با <use> سبک تکرار می‌شوند', uses > 10, uses + ' use');
+  check('هیچ دو بازیکنی چهره‌ی تکراری ندارند', faceStats.total === faceStats.unique,
+    `${faceStats.unique}/${faceStats.total}`);
+  const heaviest = Object.keys(viewSprite).sort((a, b)=> viewSprite[b] - viewSprite[a])[0];
+  const heaviestKb = Math.round((viewSprite[heaviest] || 0) / 1024);
+  check('سنگین‌ترین نما برای موبایل سبک است (< ۶۰KB چهره)', (viewSprite[heaviest] || 0) < 60000,
+    `${heaviest}: ${heaviestKb}KB`);
+  console.log('      حجم چهره‌ی نماها: ' + Object.keys(viewSprite).map(k=> `${k}=${Math.round(viewSprite[k] / 1024)}KB`).join(' · '));
 
   console.log('\n=== ۱۳) درخواست‌های شبکه ===');
   check('درخواست‌های اپ از سرور واقعی عبور کردند', fetchLog.length > 10, fetchLog.length);

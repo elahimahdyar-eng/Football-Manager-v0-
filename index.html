@@ -161,6 +161,8 @@
 <div id="sheetRoot" style="display:none"></div>
 <div id="modalRoot" style="display:none"></div>
 <div id="toastRoot" class="toasts"></div>
+<!-- اسپرایت چهره‌ها: هر چهره یک‌بار ساخته می‌شود و همه‌جا با <use> تکرار می‌شود -->
+<svg id="faceSprite" width="0" height="0" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"></svg>
 <div id="genericModal"></div>
 
 <!-- ══════════ قاب بازی آفلاین ══════════ -->
@@ -181,6 +183,7 @@
 
 <script src="./js/util.js"></script>
 <script src="./js/svg.js"></script>
+<script src="./js/facegen.js"></script>
 <script src="./js/assets.js"></script>
 <script src="./js/net.js"></script>
 <script src="./js/live.js"></script>

@@ -243,7 +243,7 @@ const LIVE = {
     const bot = document.getElementById('lvDotsBot');
     if(!top || !bot) return;
     const mk = (p, side)=> `<div class="lp-dot" style="${side === 'away' ? 'top:6px' : ''}">
-        ${faceImg(p.id || p.name, { size:'xs', pos: p.pos })}
+        ${faceImg(p.id || p.name, { size:'xs', pos: p.pos, age: p.age })}
       </div>`;
     const away = this._lineup('away'), home = this._lineup('home');
     top.innerHTML = away.map((p, i)=> mk(p, 'away').replace('style="top:6px"', `style="left:${8 + i * 13}%;top:8px"`)).join('');

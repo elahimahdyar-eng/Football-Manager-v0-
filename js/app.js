@@ -398,6 +398,7 @@ const APP = {
 
   /* ---------- رندر کلی ---------- */
   render(){
+    if(typeof resetFaceSprite === 'function') resetFaceSprite();   /* فقط چهره‌های این نما در DOM */
     this.paintHeader();
     const main = document.getElementById('gameMain');
     if(!main) return;
@@ -701,7 +702,7 @@ const APP = {
       <div class="sec-title">🪑 نیمکت (${faNum(bench.length)})</div>
       <div class="bench-row">
         ${bench.map(p=>`<button class="bench-item" onclick="APP.playerSheet('${p.id}')">
-          ${faceImg(p.id, { size:'sm', pos: p.pos })}
+          ${APP.face(p, { size:'sm', pos: p.pos })}
           <b>${escapeHtml(String(p.name).split(' ')[0])}</b>
           <span class="bi-ovr ${ovrClass(p.attack)}">${faNum(p.attack)}</span>
         </button>`).join('') || '<div class="empty" style="padding:8px">نیمکت خالی است</div>'}
@@ -723,7 +724,7 @@ const APP = {
       <div class="plist">
         ${players.filter(p=> (ST.posFilter || 'all') === 'all' || p.pos === ST.posFilter).map(p=>`
           <div class="prow p-${p.pos}" onclick="APP.playerSheet('${p.id}')">
-            ${faceImg(p.id, { size:'sm', pos: p.pos })}
+            ${APP.face(p, { size:'sm', pos: p.pos })}
             <div class="p-info">
               <div class="p-name">${escapeHtml(p.name)}
                 ${ST.captainId === String(p.id) ? '<span class="tag cap">کاپیتان</span>' : ''}
@@ -881,7 +882,7 @@ const APP = {
         ${list.length ? list.map((x, i)=>`
           <div class="scorer-row">
             <span class="sr-rank">${faNum(i + 1)}</span>
-            ${faceImg(x.id, { size:'xs', pos: null })}
+            ${APP.faceList(x, { size:'xs', pos: null })}
             <div class="sr-info">
               <div class="sr-name">${escapeHtml(x.name || '')}</div>
               <div class="sr-club">${escapeHtml(x.club || '')}</div>
@@ -890,7 +891,14 @@ const APP = {
           </div>`).join('') : '<div class="empty" style="padding:14px">هنوز آماری ثبت نشده</div>'}
       </div>`;
     };
-    return block('آقای گل', '⚽', S.scorers) + block('پاس گل', '🎯', S.assists) + block('کلین‌شیت', '🧤', S.cleanSheets, '', 'var(--blue)');
+    const totals = `
+      <div class="card tight crowd-strip">
+        <div class="cs-item"><b>${faNum(S.totalGoals || 0)}</b><span>⚽ گل این فصل</span></div>
+        <div class="cs-item"><b>${faNum(S.totalAssists || 0)}</b><span>🎯 پاس گل</span></div>
+        <div class="cs-item"><b>${faNum(S.totalCleanSheets || 0)}</b><span>🧤 کلین‌شیت</span></div>
+        <div class="cs-item"><b>${faNum(S.scorerCount || 0)}</b><span>👟 گل‌زن</span></div>
+      </div>`;
+    return totals + block('آقای گل', '⚽', S.scorers) + block('پاس گل', '🎯', S.assists) + block('کلین‌شیت', '🧤', S.cleanSheets, '', 'var(--blue)');
   },
   historyHTML(lg){
     const h = (lg.history || []).slice().reverse();
@@ -962,7 +970,7 @@ const APP = {
     const wallet = (ST.profile || {}).wallet || 0;
     const can = x.price <= wallet && !x.bought;
     return `<div class="market-item">
-      ${faceImg(x.id, { size:'md', pos: null })}
+      ${APP.faceList(x, { size:'md', pos: null })}
       <div class="mi-info">
         <div class="mi-name">${escapeHtml(x.name)}</div>
         <div class="mi-meta">
@@ -986,7 +994,7 @@ const APP = {
     if(!players.length) return '<div class="card"><div class="empty">بازیکنی برای فروش نداری.</div></div>';
     return players.map(p=>`
       <div class="market-item">
-        ${faceImg(p.id, { size:'md', pos: null })}
+        ${APP.faceList(p, { size:'md', pos: null })}
         <div class="mi-info">
           <div class="mi-name">${escapeHtml(p.name)}</div>
           <div class="mi-meta"><span class="tag">${p.pos}</span><span>${faNum(p.age)} سال</span>
@@ -1148,7 +1156,7 @@ const APP = {
         <button class="icon-btn" onclick="APP.closeSheet()">✕</button>
       </div>
       <div class="p-hero">
-        ${faceImg(p.id, { size:'lg', big:true, pos: p.pos, ring: inLine ? 'pitch' : '' })}
+        ${APP.face(p, { size:'lg', pos: p.pos, ring: inLine ? 'pitch' : '' })}
         <div class="p-hinfo">
           <div class="p-hname">${escapeHtml(p.name)}</div>
           <div class="p-htags">
@@ -1161,11 +1169,17 @@ const APP = {
         </div>
         <div class="p-big-ovr ${ovrClass(p.attack)}"><b>${faNum(p.attack)}</b><span>قدرت</span></div>
       </div>
+      <div class="look-line">
+        <span class="look-ico">🧑‍🦱</span>
+        <span class="look-t">${escapeHtml(faceMeta(p.id, p.age).tone)}</span>
+      </div>
       <div class="attr-grid">
         <div class="attr"><span class="a-l">پتانسیل رشد</span><span class="a-v">${faNum(p.potential)}</span></div>
         <div class="attr"><span class="a-l">ارزش بازار</span><span class="a-v">${moneyFmt(p.value)}</span></div>
         <div class="attr"><span class="a-l">پست اصلی</span><span class="a-v">${posIcon(p.pos)} ${posFa(p.pos)}</span></div>
         <div class="attr"><span class="a-l">سن</span><span class="a-v">${faNum(p.age)}</span></div>
+        <div class="attr"><span class="a-l">اندام</span><span class="a-v">${escapeHtml(playerBody(p.id, p.pos).line)}</span></div>
+        <div class="attr"><span class="a-l">مزیت بدنی</span><span class="a-v">${escapeHtml(playerBody(p.id, p.pos).detail)}</span></div>
       </div>
       <div class="btn-row">
         <button class="btn ghost" onclick="APP.setCaptain('${p.id}')">${isCap ? 'برداشتن کاپیتانی' : '⭐ کاپیتان کن'}</button>
@@ -1253,7 +1267,7 @@ const APP = {
       <div class="plist">
         ${all.map(p=>`
           <div class="prow p-${p.pos} ${String(p.id) === String(current) ? 'hl' : ''}" onclick="APP.placeInSlot(${idx}, '${p.id}')">
-            ${faceImg(p.id, { size:'sm', pos: p.pos })}
+            ${APP.face(p, { size:'sm', pos: p.pos })}
             <div class="p-info">
               <div class="p-name">${escapeHtml(p.name)} ${p.pos === want ? '<span class="tag ok">پست درست</span>' : ''}</div>
               <div class="p-meta">${posFa(p.pos)} · ${faNum(p.age)} سال · ${(ST.lineup || []).includes(String(p.id)) ? 'در ترکیب' : 'ذخیره'}</div>
@@ -1497,6 +1511,16 @@ const APP = {
       if(r.league) ST.league = r.league;
       showToast('ترکیب این هفته ثبت شد ✅', 'ok');
     });
+  },
+  /* کیت باشگاه من (برای پیراهن چهره‌ها) */
+  myKit(){ const k = (ST.profile || {}).kit; return k && k.c1 ? { c1: k.c1, c2: k.c2 || '#0b1220' } : null; },
+  face(p, opts){
+    const o = opts || {};
+    return faceImg((p && p.id) || p, Object.assign({ age:(p && p.age) || 0, kit:this.myKit() }, o));
+  },
+  /* فهرست‌های بلند (بازار/فهرست تیم/فروش): چهره‌ی سبک برای موبایل */
+  faceList(p, opts){
+    return this.face(p, Object.assign({ detail:'lean' }, opts || {}));
   },
   async playWeek(){
     if(!ST.leagueId){ showToast('اول یک لیگ بساز', 'err'); return; }

@@ -603,6 +603,26 @@ input[type=checkbox]{width:20px;height:20px;accent-color:#34d399}
 .face.fpos-fw{box-shadow:0 0 0 2px rgba(244,97,79,.6),0 6px 16px rgba(0,0,0,.4)}
 
 /* ---------------------------------------------------------------
+   ۱۳.۶) چهره‌ی رویه‌ای بازیکن (SVG درون‌خطی)
+   --------------------------------------------------------------- */
+.face{overflow:hidden}
+.face-svg{display:block;width:100%;height:100%;border-radius:inherit}
+#faceSprite{position:absolute!important;width:0!important;height:0!important;overflow:hidden!important;pointer-events:none}
+.face-svg use{display:block}
+/* ظرف چهره در حالت‌های مختلف: بدون تصویر، بدون درخواست شبکه */
+.face-lg .face-svg,.face-xl .face-svg{border-radius:16px}
+p-hero .face,.p-hero .face-svg{border-radius:18px}
+.look-line{display:flex;align-items:center;gap:8px;margin:2px 0 10px;
+  padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.08)}
+.look-ico{font-size:1.05rem}
+.look-t{font-size:.76rem;color:#cbd5e1;font-weight:600}
+/* نوار مجموع آمار لیگ (آقای گل/پاس گل/کلین‌شیت) */
+.crowd-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;text-align:center}
+.cs-item{padding:8px 4px;border-radius:12px;background:rgba(255,255,255,.04)}
+.cs-item b{display:block;font-size:1.05rem;font-weight:900;color:#f8fafc}
+.cs-item span{font-size:.6rem;color:#94a3b8;font-weight:600}
+/* ---------------------------------------------------------------
    ۱۴) واکنش‌گرایی و حالت‌های خاص
    --------------------------------------------------------------- */
 @media (min-width:600px){

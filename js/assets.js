@@ -4,12 +4,13 @@
    چرا این فایل؟
    • چهره‌ی بازیکن مهم‌ترین چیز بصری در بازی‌های مدیریتی است؛
      بازی‌های مرجع (Top Eleven / OSM / FM) همه پرتره‌ی واقعی دارند.
-   • اینجا ۱۰ پرتره‌ی استودیوییِ حرفه‌ای (assets/faces) داریم و
-     «انتخاب چهره» کاملاً قطعی است: هر شناسه/نام همیشه یک چهره‌ی
-     ثابت می‌گیرد ⇒ هم بین دستگاه‌ها یکسان است، هم روی سرور
-     قابل بازتولید (فقط هش لازم است، نه تصویر).
-   • برای موبایل: نسخه‌ی بندانگشتی (thumbs) برای فهرست‌ها، نسخه‌ی
-     بزرگ فقط برای پروفایل بازیکن و پخش زنده.
+   • چهره‌ها از نسخه‌ی ۲ «تولید رویه‌ای» می‌شوند (js/facegen.js):
+     هر بازیکن از ترکیب ۱۰ مدل صورت × ۱۲ رنگ پوست × ۲۰ مدل مو ×
+     ۱۲ رنگ مو × ۶ چشم × ۶ رنگ چشم × ۸ ریش × … چهره‌ی اختصاصی
+     خودش را می‌گیرد — قطعی، بدون فایل تصویری و بدون درخواست شبکه.
+     (۱۰ پرتره‌ی قدیمی assets/faces فقط به‌عنوان آرشیو مانده‌اند.)
+   • برای موبایل: چهره‌ی کوچک ساده‌تر ساخته می‌شود و در #faceSprite
+     یک‌بار به‌صورت <symbol> می‌نشیند و همه‌جا با <use> تکرار می‌شود.
    ============================================================ */
 
 /* ---------- هش پایه (هم‌الگوریتم با svg.js و موتور) ---------- */
@@ -21,32 +22,68 @@ function assetHash(str){
   return h >>> 0;
 }
 
-/* ---------- چهره‌ها ---------- */
-const FACE_FILES = ['f01','f02','f03','f04','f05','f06','f07','f08','f09','f10'];
-const FACE_DIR = './assets/faces/';
-const FACE_META = {           /* برای متن‌های کوچک کنار چهره (مثلاً پروفایل) */
-  f01:{tone:'خوش‌تراش · ۲۸ ساله',skin:'گندمی'}, f02:{tone:'خندان · ۲۲ ساله',skin:'تیره'},
-  f03:{tone:'آرام · ۲۶ ساله',skin:'روشن'},      f04:{tone:'پرهیجان · ۲۵ ساله',skin:'برنزه'},
-  f05:{tone:'متمرکز · ۲۵ ساله',skin:'زیتونی'},  f06:{tone:'باتجربه · ۳۴ ساله',skin:'گندمی'},
-  f07:{tone:'جوان · ۱۸ ساله',skin:'زیتونی'},    f08:{tone:'تنومند · ۳۰ ساله',skin:'تیره'},
-  f09:{tone:'خونسرد · ۲۷ ساله',skin:'روشن'},    f10:{tone:'پرقدرت · ۲۹ ساله',skin:'برنزه'}
-};
-const FACE_POS_BIAS = {       /* دروازه‌بان‌ها بیشتر F06/F11-ساکن، مهاجم‌ها جوان‌تر */
-  GK:['f06','f01','f10','f08','f03'],
-  DF:['f08','f01','f10','f09','f06','f02'],
-  MF:['f03','f09','f05','f04','f12','f07','f01'],
-  FW:['f04','f05','f07','f02','f12','f11']
-};
-/* شماره‌ی چهره برای یک بازیکن: همیشه ثابت برای همان شناسه */
-function faceIndex(seed){
-  const h = assetHash('face:' + String(seed));
-  return h % FACE_FILES.length;
+/* ---------- چهره‌ی بازیکن ----------
+   از این نسخه، «۱۰ عکس ثابت» جای خود را به موتور چهره‌ی رویه‌ای
+   (js/facegen.js) داده است. نتیجه:
+     • هر بازیکن چهره‌ی اختصاصی خودش را دارد
+       (۱۰ مدل صورت × ۱۲ رنگ پوست × ۲۰ مدل مو × ۱۲ رنگ مو × ۶ چشم
+        × ۶ رنگ چشم × ۸ ریش × ۵ بینی × ۵ دهان × ۴ ابرو)
+     • چهره </>حافظه</> لازم ندارد: SVG برداری درون‌خطی است، روی DPR
+       موبایل تیز می‌ماند و هیچ فایل/درخواست شبکه‌ای ندارد
+     • قطعی است: همان شناسه ⇒ همان چهره، روی هر دستگاه و روی سرور
+   جایگزین‌های سازگاری: faceUrl/faceKey برای کدهای قدیمی.            */
+
+/* ---------- لایه‌ی اسپرایت چهره ----------
+   یک بازیکن ممکن است در یک صفحه چند بار دیده شود (زمین، نیمکت، فهرست،
+   پخش زنده). به‌جای تکرار SVG، هر چهره یک‌بار به‌صورت <symbol> در
+   #faceSprite ثبت می‌شود و بقیه‌ی جاها فقط <use> می‌گیرند:
+     • حجم HTML یک صفحه چند برابر کمتر می‌شود
+     • گره‌های DOM و کار رندر مرورگر خیلی سبک‌تر می‌شود (مهم برای موبایل)
+   اگر #faceSprite در سند نباشد (مثل تست‌های هدلس یا صفحه‌ی آفلاین)،
+   خودکار به SVG درون‌خطی برمی‌گردیم.                              */
+const FACE_SYMBOLS = new Set();
+function faceSpriteHost(){
+  try{ return document.getElementById('faceSprite'); }catch(e){ return null; }
 }
-function faceKey(seed){ return FACE_FILES[faceIndex(seed)]; }
-function faceUrl(seed, big){
-  return FACE_DIR + (big ? '' : 'thumbs/') + faceKey(seed) + '.jpg';
+/* در شروع هر رندر، اسپرایت از نو ساخته می‌شود تا در یک نشست طولانی
+   صدها چهره در DOM جمع نشوند (حافظه‌ی موبایل). هر نما فقط چهره‌های
+   خودش را ثبت می‌کند. */
+function resetFaceSprite(){
+  FACE_SYMBOLS.clear();
+  const host = faceSpriteHost();
+  if(host){ try{ host.innerHTML = ''; }catch(e){} }
 }
-function faceMeta(seed){ return FACE_META[faceKey(seed)] || {tone:'',skin:''}; }
+function faceSymbolId(seed, size, kit, age, detail){
+  const key = [seed, size || 'md', detail || '-', age || 0, (kit && kit.c1) || '-', (kit && kit.c2) || '-'].join('|');
+  const h = (typeof fgHash === 'function') ? fgHash(key, 'sym') : assetHash(key);
+  return 'fa' + h.toString(36) + (size || 'md');
+}
+/* چهره‌ی SVG برای یک بازیکن (تنها تابعی که بقیه‌ی فایل‌ها صدا می‌زنند) */
+function faceSVG(seed, opts){
+  const o = opts || {};
+  if(typeof playerFaceSVG === 'function'){
+    const kit = o.kit || (typeof kitOf === 'function' ? kitOf(seed) : null);
+    return playerFaceSVG(seed, { size: o.size || 'md', detail: o.detail, kit, age: o.age || 0, mood: o.mood });
+  }
+  /* اگر موتور چهره بارگذاری نشده باشد، آدمک هندسی قدیمی */
+  return (typeof avatarSVG === 'function') ? avatarSVG(seed) : '';
+}
+/* توضیح کوتاه چهره برای پروفایل بازیکن («فر · ته‌ریش · پوست گندمی») */
+function faceMeta(seed, age){
+  if(typeof faceSpec === 'function'){
+    const spec = faceSpec(seed, { age: age || 0 });
+    return { tone: spec.desc, skin: spec.skin.fa, hair: spec.hair.fa, beard: spec.beard.fa, eyes: spec.eyes.fa };
+  }
+  return { tone:'', skin:'', hair:'', beard:'', eyes:'' };
+}
+/* مشخصات بدنی بازیکن (قد/وزن/پای تخصصی) — از همان موتور قطعی */
+function playerBody(seed, pos){
+  if(typeof faceBody === 'function') return faceBody(seed, pos);
+  return { line:'', detail:'', height:0, weight:0, foot:'', build:'' };
+}
+/* سازگاری با کد قدیمی: دیگر تصویری روی دیسک نیست (همه درون‌خطی) */
+function faceKey(seed){ return 'gen:' + String(seed); }
+function faceUrl(){ return ''; }
 
 /* رنگ تیم (پیراهن/آرم) از نام باشگاه — قطعی و همیشه یکسان */
 const KIT_PALETTE = [
@@ -79,18 +116,36 @@ function kitPatternDefs(id, k){
 function faceImg(seed, opts){
   const o = opts || {};
   const size = o.size || 'md';
-  const url = faceUrl(seed, o.big === true || size === 'xl');
   const ring = o.ring ? ` ring-${o.ring}` : '';
   const posCls = o.pos ? ` fpos-${String(o.pos).toLowerCase()}` : '';
   const badge = o.ovr !== undefined && o.ovr !== null
     ? `<span class="face-ovr ${ovrClass(o.ovr)}">${faNum(o.ovr)}</span>` : '';
   const posTag = o.pos ? `<span class="face-pos pos-${String(o.pos).toLowerCase()}">${String(o.pos)}</span>` : '';
-  const lazy = o.lazy === false ? '' : 'loading="lazy"';
-  return `<div class="face face-${size}${ring}${posCls} ${o.cls || ''}" style="${o.style || ''}">
-    <img src="${url}" alt="" ${lazy} decoding="async" draggable="false">
+  const sizeCss = o.px ? `width:${o.px}px;height:${Math.round(o.px * 1.18)}px;` : '';
+  const host = (typeof faceBodySVG === 'function') ? faceSpriteHost() : null;
+  let artwork;
+  if(host){
+    const symId = faceSymbolId(seed, size, o.kit, o.age, o.detail);
+    if(!FACE_SYMBOLS.has(symId)){
+      let html = '';
+      try{ html = faceBodySVG(seed, { size, detail: o.detail, kit: o.kit, age: o.age }); }catch(e){ html = ''; }
+      if(html){
+        try{ host.insertAdjacentHTML('beforeend', `<symbol id="${symId}" viewBox="0 0 100 120">${html}</symbol>`); }catch(e){}
+        FACE_SYMBOLS.add(symId);
+      }
+    }
+    artwork = FACE_SYMBOLS.has(symId)
+      ? `<svg class="face-svg" viewBox="0 0 100 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#${symId}" xlink:href="#${symId}"></use></svg>`
+      : faceSVG(seed, { size, detail: o.detail, kit: o.kit, age: o.age });
+  } else {
+    artwork = faceSVG(seed, { size, detail: o.detail, kit: o.kit, age: o.age });
+  }
+  return `<div class="face face-${size}${ring}${posCls} ${o.cls || ''}" style="${sizeCss}${o.style || ''}">
+    ${artwork}
     ${posTag}${badge}
   </div>`;
 }
+
 function ovrClass(n){
   const v = Number(n) || 0;
   if(v >= 82) return 'ov-legend';

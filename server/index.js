@@ -137,6 +137,9 @@ function topStats(map, n){
   arr.sort((a, b)=> b.value - a.value || (a.id < b.id ? -1 : 1));
   return arr.slice(0, n || 10);
 }
+function sumStats(map){
+  return Object.keys(map || {}).reduce((a, k)=> a + (Number(map[k].value) || 0), 0);
+}
 
 
 /* ---------- کمکی‌ها ---------- */
@@ -972,9 +975,15 @@ function leagueView(L, phone){
       ai: !!m.ai, submitted: m.submittedRound !== null && m.submittedRound !== undefined
     })),
     sideStats: {
+      /* فهرست‌ها برای نمایش ۱۰ نفر اول است، ولی مجموع‌های واقعی هم می‌آید
+         تا رابط کاربری و تست‌ها بتوانند درستی آمار را بسنجند */
       scorers: topStats((L.sideStats || {}).goals, 10),
       assists: topStats((L.sideStats || {}).assists, 10),
-      cleanSheets: topStats((L.sideStats || {}).cleanSheets, 10)
+      cleanSheets: topStats((L.sideStats || {}).cleanSheets, 10),
+      totalGoals: sumStats((L.sideStats || {}).goals),
+      totalAssists: sumStats((L.sideStats || {}).assists),
+      totalCleanSheets: sumStats((L.sideStats || {}).cleanSheets),
+      scorerCount: Object.keys((L.sideStats || {}).goals || {}).length
     },
     history: L.history || [],
     isOwner: L.ownerPhone === phone,

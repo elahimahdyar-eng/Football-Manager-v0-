@@ -240,9 +240,14 @@ async function login(phone, clubName){
   const goalsFromResults = Object.keys(forceAdv.json.league.results).reduce((a,k)=>{
     const r = forceAdv.json.league.results[k]; return a + r.h + r.a;
   }, 0);
-  const goalsFromStats = forceAdv.json.league.sideStats.scorers.reduce((a,x)=>a+x.value, 0);
+  /* فهرست آقای گل فقط ۱۰ نفر اول است؛ برای درستی آمار از مجموع واقعی استفاده می‌کنیم */
+  const ss = forceAdv.json.league.sideStats;
+  const goalsFromStats = ss.totalGoals;
   check('مجموع گل‌های آمار جانبی = مجموع گل‌های نتایج', goalsFromStats === goalsFromResults,
     JSON.stringify({stats:goalsFromStats, results:goalsFromResults}));
+  check('فهرست آقای گل زیرمجموعه‌ی مجموع واقعی است',
+    ss.scorers.reduce((a,x)=>a+x.value, 0) <= goalsFromResults && ss.scorers.length <= 10,
+    JSON.stringify({list: ss.scorers.length, totalScorers: ss.scorerCount}));
   check('آقای گل لیگ مشخص است', forceAdv.json.league.sideStats.scorers.length > 0 && forceAdv.json.league.sideStats.scorers[0].value >= 1,
     JSON.stringify(forceAdv.json.league.sideStats.scorers[0] || null));
   check('کلین‌شیت هم ثبت می‌شود', Array.isArray(forceAdv.json.league.sideStats.cleanSheets));
