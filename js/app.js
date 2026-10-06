@@ -1071,6 +1071,8 @@ const APP = {
       <div class="card tight">
         <div class="row" onclick="AUTH.showServerSettings()" style="cursor:pointer">
           <span class="r-l">🌐 آدرس سرور</span><span class="r-r tiny">${escapeHtml(NET.base() || 'همین آدرس')}</span></div>
+        <div class="row" onclick="APP.openFaceGallery()" style="cursor:pointer">
+          <span class="r-l">🧑‍🦱 گالری چهره‌های بازیکنان</span><span class="r-r">←</span></div>
         <div class="row" onclick="AUTH.goOffline()" style="cursor:pointer">
           <span class="r-l">🎮 بازی آفلاین (تک‌نفره)</span><span class="r-r">←</span></div>
         <div class="row" onclick="APP.reloadAll()" style="cursor:pointer">
@@ -1513,6 +1515,11 @@ const APP = {
     });
   },
   /* کیت باشگاه من (برای پیراهن چهره‌ها) */
+  /* گالری چهره‌های تولیدی (صفحه‌ی faces.html) */
+  openFaceGallery(){
+    try{ window.open('./faces.html', '_blank'); }
+    catch(e){ showToast('گالری در مرورگر باز می‌شود', 'info'); }
+  },
   myKit(){ const k = (ST.profile || {}).kit; return k && k.c1 ? { c1: k.c1, c2: k.c2 || '#0b1220' } : null; },
   face(p, opts){
     const o = opts || {};

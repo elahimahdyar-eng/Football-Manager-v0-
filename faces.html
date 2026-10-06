@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>گالری چهره‌های تولیدی — مدیر تیم</title>
+<link rel="stylesheet" href="./css/app.css">
+<style>
+  .gwrap{max-width:1100px;margin:0 auto;padding:16px}
+  .ghead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .ghead h1{font-size:1.15rem;margin:0}
+  .ghead .gstats{font-size:.78rem;color:#94a3b8}
+  .gbtns{margin-inline-start:auto;display:flex;gap:8px;flex-wrap:wrap}
+  .ggrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
+  .gcell{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+    border-radius:14px;padding:8px;text-align:center}
+  .gcell .face{width:100%;height:118px;border-radius:12px;margin-bottom:6px}
+  .gcell .gn{font-size:.68rem;font-weight:800;color:#e2e8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gcell .gd{font-size:.58rem;color:#94a3b8;line-height:1.5;margin-top:2px;height:2.6em;overflow:hidden}
+  .gsec{margin:22px 0 10px;font-size:.9rem;font-weight:800;color:#cbd5e1}
+  .gsec span{font-size:.72rem;font-weight:600;color:#94a3b8}
+  .gpitch{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
+  .gpitch .gcell{padding:6px}
+  .gpitch .face{height:86px}
+</style>
+</head>
+<body>
+<div class="gwrap">
+  <div class="ghead">
+    <h1>🧑‍🦱 گالری چهره‌های تولیدی</h1>
+    <div class="gstats" id="gStats">—</div>
+    <div class="gbtns">
+      <button class="btn sm ghost" onclick="shuffle()">🎲 ترکیب تازه</button>
+      <button class="btn sm ghost" onclick="location.href='./index.html'">↩︎ بازی</button>
+    </div>
+  </div>
+
+  <div class="gsec">چهره‌های بزرگ <span>(سطح جزئیات کامل — پروفایل و پخش زنده)</span></div>
+  <div class="ggrid" id="gridBig"></div>
+
+  <div class="gsec">چهره‌های کوچک <span>(سطح سبک — فهرست‌ها و زمین بازی)</span></div>
+  <div class="gpitch" id="gridSmall"></div>
+
+  <div class="gsec">یک تیم نمونه <span>(۱۱ بازیکن با پیراهن و رنگ‌بندی باشگاه)</span></div>
+  <div class="gpitch" id="gridSquad"></div>
+
+  <div class="gsec">تنوع مؤلفه‌ها <span>(هر مؤلفه چقدر در نمونه‌ها استفاده شده)</span></div>
+  <div id="gMix" class="gstats"></div>
+</div>
+
+<script src="./js/util.js"></script>
+<script src="./js/svg.js"></script>
+<script src="./js/facegen.js"></script>
+<script src="./js/assets.js"></script>
+<script>
+/* ---------- گالری: همه‌چیز با همان موتور چهره‌ی خود بازی ساخته می‌شود ---------- */
+const POS = ['GK', 'DF', 'DF', 'DF', 'DF', 'MF', 'MF', 'MF', 'MF', 'FW', 'FW'];
+let round = 0;
+const NAMES = ['آرش', 'بهنام', 'پویا', 'تیام', 'حسین', 'دانیال', 'رضا', 'سامان', 'شایان', 'عرفان',
+  'فرهاد', 'کاوه', 'ماهان', 'نوید', 'هوتن', 'یاسین', 'بردیا', 'پارسا', 'سینا', 'کامیار',
+  'امیر', 'ایلیا', 'رادین', 'شانتیا', 'آریا', 'بهزاد', 'پیمان', 'چیا', 'رامین', 'سورنا'];
+
+function faceCard(seed, opts, label, sub){
+  return `<div class="gcell">
+    ${faceImg(seed, opts)}
+    <div class="gn">${label}</div>
+    <div class="gd">${sub}</div>
+  </div>`;
+}
+
+function shuffle(){
+  round++;
+  const kit = kitOf('gallery-club-' + round);
+  const big = [], small = [], squad = [];
+  const mix = { shape:{}, hair:{}, beard:{}, eyeC:{}, skin:{} };
+
+  for(let i = 0; i < 24; i++){
+    const seed = 'g' + round + '-big-' + i;
+    const meta = faceMeta(seed, 19 + (i % 22));
+    const spec = faceSpec(seed, { age: 19 + (i % 22) });
+    [mix.shape, mix.hair, mix.beard, mix.eyeC, mix.skin].forEach((m, k)=>{
+      const v = [spec.shape, spec.hair, spec.beard, spec.eyeC, spec.skin][k];
+      m[v.fa] = (m[v.fa] || 0) + 1;
+    });
+    big.push(faceCard(seed, { size:'lg', detail:'full', age: 19 + (i % 22), kit }, NAMES[i % NAMES.length], meta.tone));
+  }
+  for(let i = 0; i < 24; i++){
+    const seed = 'g' + round + '-sm-' + i;
+    small.push(faceCard(seed, { size:'sm', pos: POS[i % POS.length], age: 20 + (i % 15), kit }, NAMES[(i + 7) % NAMES.length], POS[i % POS.length]));
+  }
+  /* یک تیم نمونه با پیراهن باشگاه */
+  for(let i = 0; i < 11; i++){
+    const seed = 'g' + round + '-squad-' + i;
+    squad.push(faceCard(seed, { size:'sm', pos: POS[i], detail:'lean', age: 21 + (i % 12), kit: { c1:'#e11d48', c2:'#0f172a' } },
+      NAMES[(i + 3) % NAMES.length], POS[i]));
+  }
+
+  document.getElementById('gridBig').innerHTML = big.join('');
+  document.getElementById('gridSmall').innerHTML = small.join('');
+  document.getElementById('gridSquad').innerHTML = squad.join('');
+
+  const combos = faceCombos();
+  document.getElementById('gStats').textContent =
+    `ترکیب ممکن: ${combos.toLocaleString('fa-IR')} چهره · ${Object.keys(mix.shape).length} مدل صورت · ${Object.keys(mix.hair).length} مدل مو در همین ۲۴ نفر`;
+  document.getElementById('gMix').innerHTML = Object.keys(mix).map(k=>{
+    const fa = { shape:'مدل صورت', hair:'مدل مو', beard:'ریش', eyeC:'رنگ چشم', skin:'رنگ پوست' }[k];
+    const items = Object.keys(mix[k]).map(n=> `${n} (${mix[k][n]})`).join(' · ');
+    return `<div style="margin:4px 0"><b style="color:#e2e8f0">${fa}:</b> ${items}</div>`;
+  }).join('');
+}
+shuffle();
+</script>
+</body>
+</html>
