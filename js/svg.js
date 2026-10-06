@@ -47,24 +47,58 @@ function avatarSVG(seed, morale){
     <path d="${mouthPath}" stroke="#7a3b2e" stroke-width="2.2" fill="none" stroke-linecap="round"/>
   </svg>`;
 }
+/* آرم باشگاه: شکل + الگوی پارچه + ستاره — همه از هش نام (قطعی و آفلاین) */
+const CREST_PALETTE = [
+  ['#e11d48','#4c0519'], ['#2563eb','#0b1220'], ['#059669','#032a1c'], ['#f59e0b','#3b2200'],
+  ['#7c3aed','#1b0a33'], ['#0891b2','#052a33'], ['#dc2626','#450a0a'], ['#0f172a','#334155'],
+  ['#db2777','#3f0722'], ['#65a30d','#1a2e05'], ['#0ea5e9','#082f49'], ['#f8fafc','#1e293b']
+];
+const CREST_PATTERNS = ['solid','stripes','halves','sash','hoops','pinstripe'];
 function crestSVG(seed){
   const h = hashSeed(seed);
-  const c1 = BG_PAIRS[h % BG_PAIRS.length][0];
-  const c2 = ['#0d1730','#0a0f1f','#132038','#101827'][Math.floor(h/5)%4];
-  const shapeIdx = Math.floor(h/9)%3;
-  const gid = nextId();
-  const letter = (String(seed).trim()[0]||'?').toUpperCase();
-  let shapePath;
-  if(shapeIdx===0) shapePath = `<path d="M10 6 H90 V50 Q90 82 50 96 Q10 82 10 50 Z" fill="url(#${gid})" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>`;
-  else if(shapeIdx===1) shapePath = `<polygon points="50,4 92,27 92,73 50,96 8,73 8,27" fill="url(#${gid})" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>`;
-  else shapePath = `<circle cx="50" cy="50" r="46" fill="url(#${gid})" stroke="rgba(255,255,255,0.25)" stroke-width="2"/>`;
-  return `<svg viewBox="0 0 100 100" width="100%" height="100%">
-    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/></linearGradient></defs>
-    ${shapePath}
-    <text x="50" y="63" font-size="40" font-weight="800" text-anchor="middle" fill="#ffffff" font-family="Vazirmatn, sans-serif" opacity="0.92">${letter}</text>
+  const pal = CREST_PALETTE[h % CREST_PALETTE.length];
+  const c1 = pal[0], c2 = pal[1];
+  const shapeIdx = Math.floor(h / 9) % 4;
+  const pattern = CREST_PATTERNS[Math.floor(h / 13) % CREST_PATTERNS.length];
+  const stars = (Math.floor(h / 17) % 7 === 0) ? 2 : (Math.floor(h / 17) % 3 === 0 ? 1 : 0);
+  const gid = nextId(), cid = nextId();
+  const letter = (String(seed).trim().split('')[0] || '?').toUpperCase();
+  let shape;
+  if(shapeIdx === 0)      shape = 'M10 8 H90 V52 Q90 82 50 96 Q10 82 10 52 Z';      /* سپر کلاسیک */
+  else if(shapeIdx === 1) shape = 'M50 4 L92 24 V58 Q92 82 50 96 Q8 82 8 58 V24 Z'; /* سپر نوک‌تیز */
+  else if(shapeIdx === 2) shape = 'M50 4 A46 46 0 1 1 49.9 4 Z';                    /* دایره */
+  else                    shape = 'M50 3 L94 50 L50 97 L6 50 Z';                    /* لوزی */
+  let pat = '';
+  if(pattern === 'stripes')        pat = [0,1,2,3,4,5].map(i=>`<rect x="${8 + i * 15}" y="0" width="8" height="100" fill="${c2}" opacity=".8"/>`).join('');
+  else if(pattern === 'halves')    pat = `<rect x="50" y="0" width="50" height="100" fill="${c2}" opacity=".8"/>`;
+  else if(pattern === 'sash')      pat = `<path d="M-6 88 L58 -6 L86 -6 L22 88 Z" fill="${c2}" opacity=".75"/>`;
+  else if(pattern === 'hoops')     pat = [0,1,2,3].map(i=>`<rect x="0" y="${18 + i * 20}" width="100" height="9" fill="${c2}" opacity=".75"/>`).join('');
+  else if(pattern === 'pinstripe') pat = [0,1,2,3,4,5,6].map(i=>`<rect x="${9 + i * 13}" y="0" width="3" height="100" fill="${c2}" opacity=".6"/>`).join('');
+  return `<svg viewBox="0 0 100 100" width="100%" height="100%" class="crest-svg">
+    <defs>
+      <clipPath id="${cid}"><path d="${shape}"/></clipPath>
+      <linearGradient id="${gid}" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${c1}"/><stop offset="100%" stop-color="${c2}"/>
+      </linearGradient>
+    </defs>
+    <g clip-path="url(#${cid})">
+      <rect width="100" height="100" fill="url(#${gid})"/>
+      ${pat}
+      <rect width="100" height="100" fill="url(#${gid})" opacity=".16"/>
+      <path d="M0 74 Q50 58 100 74 V100 H0 Z" fill="#000" opacity=".2"/>
+    </g>
+    <path d="${shape}" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="3" stroke-linejoin="round"/>
+    <text x="50" y="${shapeIdx === 3 ? 63 : 61}" font-size="36" font-weight="900" text-anchor="middle"
+      fill="#fff" font-family="Vazirmatn,sans-serif" opacity=".95">${letter}</text>
+    ${stars ? `<g fill="#fde68a" opacity=".95">${Array.from({length:stars},(_,i)=>`<path transform="translate(${33 + i * 20},${shapeIdx === 2 ? 84 : 82}) scale(.42)" d="M12 2l3 7 8 .6-6 5 1.8 7.8L12 18l-7 4.4L7 14.6 1 9.6 9 9z"/></g>`).join('')}</g>` : ''}
   </svg>`;
 }
-function avatarImg(seed, cls, morale){ return `<div class="avatar ${cls||''}">${avatarSVG(seed, morale)}</div>`; }
+/* چهره‌ی بازیکن: اگر کیت تصویری (assets.js) بارگذاری شده باشد پرتره‌ی واقعی،
+   وگرنه همان آدمک SVG — پس همیشه چیزی برای دیدن هست، حتی کاملاً آفلاین */
+function avatarImg(seed, cls, morale){
+  if(typeof faceImg === 'function') return faceImg(seed, { size: 'sm', cls: cls || '' });
+  return `<div class="avatar ${cls||''}">${avatarSVG(seed, morale)}</div>`;
+}
 function crestImg(seed, cls){ return `<div class="crest ${cls||''}">${crestSVG(seed)}</div>`; }
 function posColor(pos){ return {GK:'#8b93ff', DF:'#34d399', MF:'#fbbf24', FW:'#f4614f'}[pos] || '#93a1b8'; }
 function jerseyNumber(seed){ return 1 + (hashSeed(String(seed)+'#num') % 99); }

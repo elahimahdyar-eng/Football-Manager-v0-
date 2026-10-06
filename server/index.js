@@ -23,6 +23,7 @@ const { URL } = require('url');
 
 const store = require('./store');
 const core = require('../js/league-core.js');
+const manager = require('./manager');
 const { engine, engineFingerprint } = require('./engine-node');
 
 const ROOT = path.join(__dirname, '..');
@@ -265,8 +266,12 @@ function simulateLeagueRound(league, round){
     report.id = 'lg_' + league.id.slice(0,8) + '_' + round + '_' + hi + '_' + ai;
     report.competition = 'server-league';
     report.round = round;
+    /* «عکس لحظه‌ای» ورودی‌های موتور: با این کار بازتولید/تأیید نتیجه حتی بعد از
+       تغییر آمادگی و روحیه (خستگی هفتگی) هم دقیق می‌ماند — و پخش زنده می‌تواند
+       ترکیب دقیق همان مسابقه را نشان دهد. */
+    report.sides = { home: homeSide, away: awaySide };
     db.matches[report.id] = report;
-    const result = { h: report.homeGoals, a: report.awayGoals, s: seed, hi, ai, r: round, verified: true };
+    const result = { h: report.homeGoals, a: report.awayGoals, s: seed, hi, ai, r: round, verified: true, reportId: report.id };
     league.results[key] = result;
     accumulateSideStats(league, report, A.squad, B.squad);
     out.push({ key, round, hi, ai, result, reportId: report.id });
@@ -284,9 +289,67 @@ function advanceRound(league){
   const matches = simulateLeagueRound(league, round);
   league.week = round + 1;
   league.lastSimulatedAt = now();
+  settleRoundForMembers(league, round, matches);   /* اقتصاد، رکورد، خستگی، اخبار */
   openWindow(league, round + 1);
   store.save();
   return { done: false, round, matches };
+}
+
+/* ============================================================
+   تسویه‌ی هفته برای اعضای واقعی (نه تیم‌های AI)
+   ------------------------------------------------------------
+   بعد از هر دور: پاداش نتیجه + درآمد بلیت − هزینه‌ی هفتگی،
+   به‌روزرسانی رکورد مربی، خستگی/روحیه‌ی اسکواد و ثبت خبر.
+   این‌ها همان چیزهایی هستند که «باشگاه» را زنده نگه می‌دارند.
+   ============================================================ */
+function settleRoundForMembers(league, round, matches){
+  const db = store.get();
+  (matches || []).forEach(m=>{
+    [m.hi, m.ai].forEach((idx, sideIdx)=>{
+      const mem = league.members[idx];
+      if(!mem || !mem.phone) return;
+      const player = db.players[mem.phone];
+      if(!player) return;
+      manager.ensureProfile(player);
+      const isHome = sideIdx === 0;
+      const myGoals = isHome ? m.result.h : m.result.a;
+      const oppGoals = isHome ? m.result.a : m.result.h;
+      const outcome = manager.applyRecord(player, myGoals, oppGoals);
+      const bonus = outcome === 'w' ? manager.WIN_BONUS : outcome === 'd' ? manager.DRAW_BONUS : manager.LOSS_BONUS;
+      player.wallet = Math.round((player.wallet || 0) + bonus + (isHome ? manager.GATE_BONUS : 0) - manager.WEEK_TRAINING);
+      manager.weekFitness(mem.squad, { result: outcome });
+      if(mem.squad.serverOwned === true) manager.recomputeSquad(mem.squad);
+      const oppName = leagueNamesOf(league)[isHome ? m.ai : m.hi];
+      manager.addNews(player,
+        outcome === 'w' ? '🏆' : outcome === 'd' ? '🤝' : '💔',
+        outcome === 'w' ? 'برد' : outcome === 'd' ? 'تساوی' : 'باخت',
+        `${myGoals} - ${oppGoals} برابر ${oppName} (هفته ${round + 1})`,
+        outcome === 'w' ? 'success' : outcome === 'd' ? 'info' : 'error',
+        { coins: bonus + (isHome ? manager.GATE_BONUS : 0) - manager.WEEK_TRAINING });
+    });
+  });
+}
+/* جایزه‌ی پایان فصل بر اساس رتبه‌ی نهایی + ثبت قهرمانی */
+function awardSeasonPrizes(league){
+  const db = store.get();
+  const table = leagueTableView(league);
+  table.forEach((row)=>{
+    const idx = row.i;
+    const mem = league.members[idx];
+    if(!mem || !mem.phone) return;
+    const player = db.players[mem.phone];
+    if(!player) return;
+    manager.ensureProfile(player);
+    const prize = manager.rankPrize(row.rank);
+    player.wallet = Math.round((player.wallet || 0) + prize);
+    player.record.seasons = (player.record.seasons || 0) + 1;
+    if(row.rank === 1){
+      player.record.titles = (player.record.titles || 0) + 1;
+      manager.addNews(player, '🏆', 'قهرمان لیگ!', `«${league.name}» فصل ${league.season} — جایزه ${(prize/1000000).toFixed(1)} میلیون`, 'success', { coins: prize });
+    } else {
+      manager.addNews(player, '🎖️', `رتبه ${row.rank} لیگ`, `«${league.name}» فصل ${league.season} — جایزه ${(prize/1000).toFixed(0)} هزار`, 'info', { coins: prize });
+    }
+  });
 }
 /* جمعه‌ها خودش بازی می‌کند: اگر پنجره بسته شد و کسی دکمه نزد، اولین بازدید دور را بازی می‌کند */
 function lazyAdvance(league){
@@ -355,7 +418,10 @@ async function handleApi(req, res, u){
     if(!player){
       player = { phone, clubName: sanitizeName(body.clubName, 'باشگاه من', 22), createdAt: now(), squad: null, leagueIds: [] };
       db.players[pepper(phone)] = player;
+      manager.ensureProfile(player);
+      manager.addNews(player, '🎉', 'به «مدیر تیم» خوش آمدی!', 'ترکیبت را بچین، لیگ بساز و با رفقا رقابت کن.', 'success');
     }
+    manager.ensureProfile(player);
     player.lastSeen = now();
     const token = rid('t', 24);
     db.tokens[token] = { phone: pepper(phone), exp: now() + TOKEN_TTL };
@@ -403,6 +469,7 @@ async function handleApi(req, res, u){
       })),
       slots: slots.map(String), uploadedAt: now()
     };
+    squad.serverOwned = false;                 /* در مسیر آپلود کلاینت آفلاین، قدرت اعلامی خودش معتبر است */
     s.player.squad = squad;
     s.player.clubName = squad.clubName;
     /* اسکواد در لیگ‌هایی که عضو است هم به‌روز می‌شود (ترکیب قفل‌شده‌ی لیگ) */
@@ -413,6 +480,208 @@ async function handleApi(req, res, u){
     });
     store.save();
     return sendJson(res, 200, { ok: true, squad: { clubName: squad.clubName, formation, players: squad.players.length } });
+  }
+
+  /* ============================================================
+     پروفایل، اسکواد مالکیت‌سرور، بازار، رکورد و اخبار (لایه‌ی «مدیر باشگاه»)
+     ------------------------------------------------------------
+     این بخش همان چیزی است که بازی آنلاین را از یک «دموی لیگ» به یک
+     بازی موبایل کامل تبدیل می‌کند: کیف پول، نقل و انتقالات، خستگی،
+     رکورد و اخبار — همه سمت سرور و قابل اعتماد.
+     ============================================================ */
+
+  /* --- پروفایل کامل --- */
+  if(p === '/api/profile'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    if(req.method === 'POST'){
+      const body = await readBody(req);
+      if(body.clubName) s.player.clubName = sanitizeName(body.clubName, s.player.clubName, 22);
+      if(body.kit && typeof body.kit === 'object'){
+        s.player.kit = {
+          c1: sanitizeName(body.kit.c1, '#22d3ee', 9), c2: sanitizeName(body.kit.c2, '#0b1220', 9),
+          pattern: sanitizeName(body.kit.pattern, 'solid', 12)
+        };
+      }
+      if(body.crest && typeof body.crest === 'object'){
+        s.player.crest = { shape: sanitizeName(body.crest.shape, 'shield', 12), hue: num(body.crest.hue, 165) };
+      }
+    }
+    manager.ensureProfile(s.player);
+    return sendJson(res, 200, { ok: true, profile: profileView(s.player) });
+  }
+
+  /* --- اسکواد: خواندن (مالکیت سرور) --- */
+  if(p === '/api/squad' && req.method === 'GET'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    if(!s.player.squad) return sendJson(res, 200, { ok: true, squad: null, hint: 'با POST /api/squad/bootstrap تیم شروع ساخته می‌شود.' });
+    manager.recomputeSquad(s.player.squad);
+    return sendJson(res, 200, { ok: true, squad: squadView(s.player.squad) });
+  }
+  /* --- اسکواد: ساخت تیم شروع (یک‌بار) --- */
+  if(p === '/api/squad/bootstrap' && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const body = await readBody(req);
+    if(body.clubName) s.player.clubName = sanitizeName(body.clubName, s.player.clubName, 22);
+    if(!s.player.squad){
+      s.player.squad = manager.startingSquad(s.player.clubName, s.player.phone);
+      manager.addNews(s.player, '👥', 'تیم شروع آماده شد', '۱۴ بازیکن در اختیار داری؛ ترکیب را بچین و اولین قرارداد را ببند.', 'success');
+    }
+    syncSquadToLeagues(s.player);
+    store.save();
+    return sendJson(res, 200, { ok: true, squad: squadView(s.player.squad), profile: profileView(s.player) });
+  }
+  /* --- اسکواد: چیدن ترکیب/تاکتیک (سرور قدرت را خودش می‌سازد) --- */
+  if(p === '/api/squad/lineup' && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    if(!s.player.squad) return sendJson(res, 400, { error: 'اول تیمت را بساز.' });
+    const body = await readBody(req);
+    const sq = s.player.squad;
+    const ids = new Set(sq.players.map(x=> String(x.id)));
+    const slots = Array.isArray(body.slots) ? body.slots.map(String).filter(id=> ids.has(id)) : [];
+    if(slots.length !== 11) return sendJson(res, 400, { error: 'ترکیب باید ۱۱ بازیکن از فهرست تیم باشد.' });
+    if(new Set(slots).size !== 11) return sendJson(res, 400, { error: 'یک بازیکن نمی‌تواند دو جای ترکیب باشد.' });
+    sq.serverOwned = true;
+    sq.slots = slots;
+    if(body.formation && ['4-4-2','4-3-3','3-5-2','5-3-2'].includes(body.formation)) sq.formation = body.formation;
+    if(body.style && ['attacking','balanced','defensive'].includes(body.style)) sq.style = body.style;
+    sq.captainId = body.captainId && ids.has(String(body.captainId)) ? String(body.captainId) : null;
+    manager.recomputeSquad(sq);
+    syncSquadToLeagues(s.player);
+    store.save();
+    return sendJson(res, 200, { ok: true, squad: squadView(sq) });
+  }
+  /* --- اسکواد: تمرین/بازیابی (اقتصاد + آمادگی سمت سرور) --- */
+  if(p === '/api/squad/train' && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    if(!s.player.squad) return sendJson(res, 400, { error: 'اول تیمت را بساز.' });
+    const body = await readBody(req);
+    const kind = sanitizeName(body.kind, 'fitness', 14);
+    const COSTS = { attack: 320000, defense: 320000, fitness: 260000, recovery: 180000 };
+    const cost = COSTS[kind] === undefined ? 300000 : COSTS[kind];
+    manager.ensureProfile(s.player);
+    if(s.player.wallet < cost) return sendJson(res, 400, { error: 'بودجه کافی نیست.', wallet: s.player.wallet, cost });
+    const sq = s.player.squad;
+    sq.serverOwned = true;
+    if(kind === 'recovery'){
+      sq.fitness = Math.min(100, (sq.fitness || 80) + 22);
+      sq.stamina = Math.min(99, (sq.stamina || 76) + 3);
+    } else if(kind === 'attack' || kind === 'defense'){
+      const wantPos = kind === 'attack' ? ['FW','MF'] : ['DF','GK'];
+      let trained = 0;
+      sq.players.forEach(pl=>{
+        if(wantPos.includes(pl.pos) && trained < 5 && pl.attack < (pl.potential || 96)){
+          pl.attack = Math.min(pl.potential || 96, pl.attack + 1);
+          trained++;
+        }
+      });
+      sq.players.forEach(pl=>{ pl.value = manager.playerValue(pl); });
+    } else {
+      sq.stamina = Math.min(99, (sq.stamina || 76) + 5);
+    }
+    s.player.wallet -= cost;
+    manager.recomputeSquad(sq);
+    syncSquadToLeagues(s.player);
+    manager.addNews(s.player, kind === 'recovery' ? '🛌' : '🏋️', 'جلسه‌ی تمرین',
+      kind === 'recovery' ? 'اردوی بازیابی انجام شد؛ آمادگی تیم بالا رفت.' : `تمرین ${kind === 'attack' ? 'تهاجمی' : kind === 'defense' ? 'دفاعی' : 'بدنی'} برگزار شد.`,
+      'info', { coins: -cost });
+    store.save();
+    return sendJson(res, 200, { ok: true, squad: squadView(sq), profile: profileView(s.player) });
+  }
+  /* --- بازار نقل و انتقالات (قطعی، مشترک بین همه) --- */
+  if(p === '/api/market' && req.method === 'GET'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    manager.ensureProfile(s.player);
+    const w = marketWeekIndex();
+    const list = manager.marketItems(w, 1);
+    return sendJson(res, 200, {
+      ok: true, week: w, wallet: s.player.wallet,
+      list: list.map(x=> Object.assign({}, x, { bought: s.player.marketBought.includes(x.id) })),
+      refreshAt: (w + 1) * MARKET_WEEK_MS
+    });
+  }
+  if(p === '/api/market/buy' && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const body = await readBody(req);
+    const id = String(body.id || '');
+    const w = marketWeekIndex();
+    const item = manager.marketItems(w, 1).find(x=> x.id === id);
+    if(!item) return sendJson(res, 404, { error: 'این بازیکن از بازار رفته (هفته عوض شده).' });
+    manager.ensureProfile(s.player);
+    if(s.player.marketBought.includes(id)) return sendJson(res, 400, { error: 'این بازیکن را قبلاً خریدی.' });
+    if(!s.player.squad) return sendJson(res, 400, { error: 'اول تیمت را بساز.' });
+    if(s.player.squad.players.length >= manager.MAX_SQUAD) return sendJson(res, 400, { error: `فهرست تیم پر است (حداکثر ${manager.MAX_SQUAD} بازیکن).` });
+    if(s.player.wallet < item.price) return sendJson(res, 400, { error: 'بودجه کافی نیست.', wallet: s.player.wallet, price: item.price });
+    s.player.wallet -= item.price;
+    s.player.marketBought.push(id);
+    s.player.squad.serverOwned = true;
+    s.player.squad.players.push({
+      id: 'b' + Date.now().toString(36), name: item.name, pos: item.pos, attack: item.attack,
+      age: item.age, potential: item.potential, value: manager.playerValue(item)
+    });
+    manager.recomputeSquad(s.player.squad);
+    syncSquadToLeagues(s.player);
+    manager.addNews(s.player, '✍️', 'بازیکن جدید امضا شد', `${item.name} (${item.pos} · ${item.attack}) با ${item.price.toLocaleString('en-US')} خریداری شد.`, 'success', { coins: -item.price });
+    store.save();
+    return sendJson(res, 200, { ok: true, squad: squadView(s.player.squad), profile: profileView(s.player) });
+  }
+  if(p === '/api/market/sell' && req.method === 'POST'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    if(!s.player.squad) return sendJson(res, 400, { error: 'اول تیمت را بساز.' });
+    const body = await readBody(req);
+    const id = String(body.playerId || '');
+    const sq = s.player.squad;
+    const idx = sq.players.findIndex(x=> String(x.id) === id);
+    if(idx < 0) return sendJson(res, 404, { error: 'این بازیکن در تیمت نیست.' });
+    if(sq.players.length <= manager.MIN_SQUAD) return sendJson(res, 400, { error: `حداقل ${manager.MIN_SQUAD} بازیکن لازم است.` });
+    const raw = sq.players[idx].value || manager.playerValue(sq.players[idx]);
+    const gain = Math.round((raw * manager.SELL_RATE) / 10000) * 10000;
+    sq.serverOwned = true;
+    const sold = sq.players.splice(idx, 1)[0];
+    sq.slots = (sq.slots || []).filter(x=> String(x) !== id);
+    if(sq.captainId === id) sq.captainId = null;
+    if(sq.slots.length < 11){
+      sq.players.forEach(p=>{ if(sq.slots.length < 11 && !sq.slots.includes(p.id) && p.pos !== 'GK') sq.slots.push(p.id); });
+      sq.players.forEach(p=>{ if(sq.slots.length < 11 && !sq.slots.includes(p.id)) sq.slots.push(p.id); });
+    }
+    manager.ensureProfile(s.player);
+    s.player.wallet += gain;
+    manager.recomputeSquad(sq);
+    syncSquadToLeagues(s.player);
+    manager.addNews(s.player, '💸', 'بازیکن فروخته شد', `${sold.name} با ${gain.toLocaleString('en-US')} فروخته شد.`, 'info', { coins: gain });
+    store.save();
+    return sendJson(res, 200, { ok: true, squad: squadView(sq), profile: profileView(s.player), gain });
+  }
+  /* --- جدول رهبران جهانی --- */
+  if(p === '/api/leaderboard' && req.method === 'GET'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    const rows = Object.keys(db.players).map(k=>{
+      const pl = db.players[k];
+      const r = pl.record || { played:0, won:0, drawn:0, lost:0, gf:0, ga:0, titles:0, seasons:0 };
+      return {
+        key: k, clubName: pl.clubName, points: (r.won || 0) * 3 + (r.drawn || 0),
+        titles: r.titles || 0, played: r.played || 0, gd: (r.gf || 0) - (r.ga || 0),
+        wallet: pl.wallet || 0, isMe: k === s.phone
+      };
+    }).filter(x=> x.played > 0 || x.isMe)
+      .sort((a, b)=> b.titles - a.titles || b.points - a.points || b.gd - a.gd || (a.clubName < b.clubName ? -1 : 1));
+    const myRank = rows.findIndex(x=> x.isMe) + 1;
+    return sendJson(res, 200, { ok: true, top: rows.slice(0, 50), myRank: myRank || null, total: rows.length });
+  }
+  /* --- اخبار باشگاه --- */
+  if(p === '/api/news' && req.method === 'GET'){
+    const s = currentPlayer(req);
+    if(!s) return sendJson(res, 401, { error: 'ابتدا وارد شو.' });
+    manager.ensureProfile(s.player);
+    return sendJson(res, 200, { ok: true, news: s.player.news || [] });
   }
 
   /* --- ساخت لیگ سروری --- */
@@ -482,7 +751,8 @@ async function handleApi(req, res, u){
     if(round === null) return sendJson(res, 200, { ok: true, done: true, league: leagueView(L, s.phone) });
     const adv = advanceRound(L);
     const matches = adv.matches || [];
-    return sendJson(res, 200, { ok: true, round: adv.round, matches: matches.map(m=>({ key:m.key, home:leagueNamesOf(L)[m.hi], away:leagueNamesOf(L)[m.ai], result:m.result, reportId:m.reportId })),
+    return sendJson(res, 200, { ok: true, round: adv.round, wallet: Math.round(s.player.wallet || 0),
+      matches: matches.map(m=>({ key:m.key, home:leagueNamesOf(L)[m.hi], away:leagueNamesOf(L)[m.ai], result:m.result, reportId:m.reportId })),
       league: leagueView(L, s.phone) });
   }
   /* --- ثبت ترکیب برای هفته‌ی جاری (پنجره‌ی هفتگی) --- */
@@ -532,7 +802,7 @@ async function handleApi(req, res, u){
     if(L.members.length < 2) return sendJson(res, 400, { error: 'برای بازی حداقل ۲ تیم لازم است.' });
     const adv = advanceRound(L);
     if(adv.done) return sendJson(res, 200, { ok: true, done: true, league: leagueView(L, s.phone) });
-    return sendJson(res, 200, { ok: true, round: adv.round, forced: force,
+    return sendJson(res, 200, { ok: true, round: adv.round, forced: force, wallet: Math.round(s.player.wallet || 0),
       matches: (adv.matches || []).map(m=>({ key:m.key, home:leagueNamesOf(L)[m.hi], away:leagueNamesOf(L)[m.ai], result:m.result, reportId:m.reportId })),
       league: leagueView(L, s.phone) });
   }
@@ -547,6 +817,7 @@ async function handleApi(req, res, u){
     if(core.leagueNextRoundFrom(L.members.length, L.results) !== null)
       return sendJson(res, 400, { error: 'فصل جاری تمام نشده.' });
     L.history = L.history || [];
+    awardSeasonPrizes(L);                       /* جایزه‌ی رتبه + ثبت قهرمانی در رکورد مربی‌ها */
     L.history.push(seasonSummary(L));
     L.season = (L.season || 1) + 1;
     L.results = {};
@@ -575,7 +846,12 @@ async function handleApi(req, res, u){
       return sendJson(res, 400, { error: 'اندیس تیم‌ها نامعتبر است.' });
     const A = L.members[hi], B = L.members[ai];
     const seed = core.leagueSeedFrom(L.id, round, A.clubName, B.clubName);
-    const report = engine.simulateMatchEngine(squadToSide(A.squad), squadToSide(B.squad), { seed });
+    /* اگر این مسابقه قبلاً بازی شده، ورودی‌های «همان لحظه» را بازتولید می‌کنیم */
+    const stored = (L.results[core.leagueKeyOf(round, hi, ai)] || {});
+    const snap = stored.reportId ? db.matches[stored.reportId] : null;
+    const homeSide = (snap && snap.sides && snap.sides.home) ? snap.sides.home : squadToSide(A.squad);
+    const awaySide = (snap && snap.sides && snap.sides.away) ? snap.sides.away : squadToSide(B.squad);
+    const report = engine.simulateMatchEngine(homeSide, awaySide, { seed });
     const ok = report.homeGoals === homeGoals && report.awayGoals === awayGoals;
     if(!ok) return sendJson(res, 200, { verified: false, server: { h: report.homeGoals, a: report.awayGoals }, seed, error: 'اختلاف نتیجه؛ سرور نتیجه را رد کرد.' });
     gradeResult(L, round, hi, ai, report, seed);
@@ -602,14 +878,87 @@ function publicPlayer(p){
   return { clubName: p.clubName, phone: p.phone, createdAt: p.createdAt, lastSeen: p.lastSeen,
     hasSquad: !!p.squad, leagues: (p.leagueIds||[]).length };
 }
+
+/* ---------- لایه‌ی «مدیر باشگاه»: نماهای آماده برای اپ موبایل ---------- */
+const MARKET_WEEK_MS = 7 * 24 * 3600 * 1000;
+function marketWeekIndex(){ return Math.floor(now() / MARKET_WEEK_MS); }
+
+/* سطح مدیر از روی تعداد بازی‌های انجام‌شده (گیمیفیکیشن سبک) */
+function managerLevel(record){
+  const played = (record && record.played) || 0;
+  const level = 1 + Math.floor(played / 3);
+  const inLevel = played % 3;
+  return { level, xp: inLevel, xpMax: 3, played };
+}
+function squadView(sq){
+  const byId = {};
+  (sq.players || []).forEach(p=>{ byId[String(p.id)] = p; });
+  const starters = (sq.slots || []).map(id=> byId[String(id)]).filter(Boolean);
+  const bench = (sq.players || []).filter(p=> !(sq.slots || []).map(String).includes(String(p.id)));
+  const list = (sq.players || []).map(p=>({
+    id: p.id, name: p.name, pos: p.pos, attack: p.attack, age: p.age || 24,
+    potential: p.potential || Math.min(96, (p.attack || 60) + 8),
+    value: p.value || manager.playerValue(p)
+  }));
+  const strength = manager.squadStrength(sq);
+  return {
+    clubName: sq.clubName, formation: sq.formation || '4-4-2', style: sq.style || 'balanced',
+    captainId: sq.captainId || null,
+    atk: strength.atk, def: strength.def,
+    overall: Math.round((strength.atk + strength.def) / 2),
+    fitness: Math.round(sq.fitness === undefined ? 90 : sq.fitness),
+    stamina: Math.round(sq.stamina === undefined ? 76 : sq.stamina),
+    morale: Math.round(sq.morale === undefined ? 78 : sq.morale),
+    players: list,
+    slots: (sq.slots || []).map(String),
+    starters: starters.map(p=> ({
+      id: p.id, name: p.name, pos: p.pos, attack: p.attack, age: p.age || 24,
+      value: p.value || manager.playerValue(p)
+    })),
+    bench: bench.map(p=> ({ id: p.id, name: p.name, pos: p.pos, attack: p.attack, age: p.age || 24,
+      value: p.value || manager.playerValue(p) })),
+    totalValue: list.reduce((s, p)=> s + (p.value || 0), 0),
+    updatedAt: sq.uploadedAt || null
+  };
+}
+function profileView(player){
+  const r = player.record || { played:0, won:0, drawn:0, lost:0, gf:0, ga:0, titles:0, seasons:0 };
+  return {
+    clubName: player.clubName, phone: player.phone,
+    wallet: Math.round(player.wallet === undefined ? manager.START_WALLET : player.wallet),
+    kit: player.kit || {}, crest: player.crest || {},
+    record: r, level: managerLevel(r),
+    hasSquad: !!player.squad, leagues: (player.leagueIds || []).length,
+    news: (player.news || []).slice(0, 20)
+  };
+}
+/* هر تغییر اسکواد باید در لیگ‌هایی که عضویم هم منعکس شود (ترکیب قفل‌شده‌ی لیگ) */
+function syncSquadToLeagues(player){
+  const db = store.get();
+  (player.leagueIds || []).forEach(id=>{
+    const L = db.leagues[id]; if(!L) return;
+    const m = L.members.find(x=> x.phone === player.phone);
+    if(m) m.squad = player.squad;
+  });
+}
 function leagueView(L, phone){
   const names = leagueNamesOf(L);
   const next = core.leagueNextRoundFrom(L.members.length, L.results);
   const table = core.leagueTableFromNames(names, L.results);
   const me = L.members.find(m=> m.phone && m.phone === phone) || null;
+  /* مسابقه‌های دور بعد + مسابقه‌ی من (برای داشبورد موبایل) */
+  let nextRoundMatches = [], myNextMatch = null;
+  if(next !== null){
+    const pairs = core.leagueFixturesFromCount(L.members.length)[next] || [];
+    nextRoundMatches = pairs.map(([hi, ai])=> ({ hi, ai, home: names[hi], away: names[ai] }));
+    myNextMatch = nextRoundMatches.find(m=> m.home === (me ? me.clubName : '') || m.away === (me ? me.clubName : '')) || null;
+  }
+  const myRow = me ? table.find(r=> r.name === me.clubName) : null;
   return {
     id: L.id, name: L.name, teams: names.length, names,
     season: L.season || 1, week: L.week, nextRound: next,
+    myNextMatch, nextRoundMatches,
+    myRank: myRow ? myRow.rank : null,
     totalRounds: core.leagueRoundCountFromCount(L.members.length),
     fixtures: core.leagueFixturesFromCount(L.members.length),
     results: L.results, table,

@@ -3,157 +3,200 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>مدیر تیم | آنلاین</title>
-<meta name="theme-color" content="#080e1a">
+<title>مدیر تیم | لیگ آنلاین فوتبال</title>
+<meta name="theme-color" content="#060a12">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="مدیر تیم">
+<meta name="description" content="بازی مدیریت فوتبال آنلاین: تیمت را بساز، با رفقا لیگ بزن و مسابقه‌ات را زنده ببین.">
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./css/app.css">
 <link rel="manifest" href="./manifest-app.json">
 <link rel="apple-touch-icon" href="./icon-192.png">
-<meta name="apple-mobile-web-app-title" content="مدیر تیم">
 </head>
 <body>
 
-<!-- ====== SPLASH ====== -->
-<div id="splash" class="screen splash-screen">
-  <div class="splash-bg">
-    <div class="pitch-lines"><div class="center-circle"></div><div class="center-line"></div><div class="penalty-box top"></div><div class="penalty-box bottom"></div></div>
-    <div class="splash-blobs"><div class="sblob s1"></div><div class="sblob s2"></div><div class="sblob s3"></div></div>
+<!-- ══════════ اسپلش ══════════ -->
+<div id="splash" class="splash">
+  <div class="splash-art">
+    <span class="glow"></span>
+    <div class="ball" id="splashBall"></div>
   </div>
-  <div class="splash-content">
-    <div class="splash-logo">
-      <div class="logo-icon"><svg viewBox="0 0 80 80" width="80" height="80"><defs><linearGradient id="lgGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#22d3ee"/><stop offset="100%" style="stop-color:#34d399"/></linearGradient></defs><circle cx="40" cy="40" r="36" fill="none" stroke="url(#lgGrad)" stroke-width="3"/><path d="M40 12 L48 28 L66 28 L52 38 L56 56 L40 46 L24 56 L28 38 L14 28 L32 28 Z" fill="url(#lgGrad)" opacity="0.9"/><circle cx="40" cy="40" r="18" fill="none" stroke="url(#lgGrad)" stroke-width="1.5" opacity="0.5"/></svg></div>
-      <h1 class="logo-title">مدیر تیم</h1>
-      <p class="logo-subtitle">MANAGER LEAGUE</p>
-    </div>
-    <div class="splash-loader"><div class="loader-bar"><div class="loader-fill"></div></div><p class="loader-text">در حال بارگذاری...</p></div>
+  <div class="splash-brand">
+    <h1>مدیر تیم</h1>
+    <p>MANAGER LEAGUE</p>
   </div>
-</div>
-
-<!-- ====== AUTH ====== -->
-<div id="auth" class="screen auth-screen" style="display:none">
-  <div class="auth-bg"><div class="splash-blobs"><div class="sblob s1"></div><div class="sblob s2"></div></div></div>
-  <div class="auth-container">
-    <div class="auth-logo">
-      <svg viewBox="0 0 60 60" width="52" height="52"><defs><linearGradient id="alGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#22d3ee"/><stop offset="100%" style="stop-color:#34d399"/></linearGradient></defs><circle cx="30" cy="30" r="27" fill="none" stroke="url(#alGrad)" stroke-width="2.5"/><path d="M30 10 L36 22 L50 22 L39 30 L42 44 L30 36 L18 44 L21 30 L10 22 L24 22 Z" fill="url(#alGrad)" opacity="0.85"/></svg>
-      <span class="auth-brand">مدیر تیم</span>
-    </div>
-    <!-- Step 1: Phone -->
-    <div id="authStep1" class="auth-step active">
-      <h2 class="auth-title">ورود به بازی</h2>
-      <p class="auth-desc">شماره موبایل خود را وارد کنید</p>
-      <div class="input-group"><div class="input-icon">📱</div><input type="tel" id="authPhone" placeholder="09123456789" maxlength="11" inputmode="numeric" autocomplete="tel"></div>
-      <button id="btnSendOtp" class="btn-primary" onclick="AUTH.sendOtp()"><span class="btn-text">دریافت کد ورود</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span></button>
-      <div id="authError1" class="auth-error"></div>
-      <div class="auth-divider"><span>یا</span></div>
-      <button class="btn-ghost" onclick="AUTH.goOffline()"><span>🎮 بازی آفلاین</span><small>بدون نیاز به اینترنت</small></button>
-      <button class="btn-link" onclick="AUTH.showServerSettings()" style="margin-top:20px; font-size:0.75rem;">⚙️ تنظیم آدرس سرور</button>
-    </div>
-    <!-- Step 2: OTP -->
-    <div id="authStep2" class="auth-step">
-      <h2 class="auth-title">کد تأیید</h2>
-      <p class="auth-desc">کد ۵ رقمی ارسال شده را وارد کنید</p>
-      <div class="otp-inputs" id="otpInputs"><input type="tel" maxlength="1" inputmode="numeric" class="otp-box" data-idx="0"><input type="tel" maxlength="1" inputmode="numeric" class="otp-box" data-idx="1"><input type="tel" maxlength="1" inputmode="numeric" class="otp-box" data-idx="2"><input type="tel" maxlength="1" inputmode="numeric" class="otp-box" data-idx="3"><input type="tel" maxlength="1" inputmode="numeric" class="otp-box" data-idx="4"></div>
-      <div id="otpHint" class="otp-hint"></div>
-      <button id="btnVerifyOtp" class="btn-primary" onclick="AUTH.verifyOtp()"><span class="btn-text">ورود</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span></button>
-      <div id="authError2" class="auth-error"></div>
-      <button class="btn-link" onclick="AUTH.backToPhone()">تغییر شماره</button>
-    </div>
-    <!-- Step 3: Club Setup -->
-    <div id="authStep3" class="auth-step">
-      <h2 class="auth-title">ساخت باشگاه</h2>
-      <p class="auth-desc">اطلاعات باشگاه خود را وارد کنید</p>
-      <div class="input-group"><div class="input-icon">🏟️</div><input type="text" id="authClubName" placeholder="نام باشگاه (مثلاً: آذرخش البرز)" maxlength="22"></div>
-      <div class="input-group"><div class="input-icon">👤</div><input type="text" id="authManagerName" placeholder="نام مدیر (خودت)" maxlength="20"></div>
-      <div class="crest-preview" id="crestPreview"></div>
-      <button class="btn-primary" onclick="AUTH.createClub()"><span class="btn-text">ساخت باشگاه و ورود</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span></button>
-      <div id="authError3" class="auth-error"></div>
-    </div>
-    <!-- Server Settings -->
-    <div id="authStepServer" class="auth-step">
-      <h2 class="auth-title">تنظیم سرور</h2>
-      <p class="auth-desc">آدرس سرور بازی را وارد کنید</p>
-      <div class="input-group"><div class="input-icon">🌐</div><input type="url" id="authServerUrl" placeholder="https://your-server.com" dir="ltr"></div>
-      <button class="btn-primary" onclick="AUTH.saveServerSettings()"><span class="btn-text">ذخیره و اتصال</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span></button>
-      <div id="authErrorServer" class="auth-error"></div>
-      <button class="btn-link" onclick="AUTH._goToStep(1)">بازگشت</button>
-    </div>
+  <div class="splash-load">
+    <div class="load-bar"><i></i></div>
+    <div class="load-txt">در حال آماده‌سازی ورزشگاه…</div>
   </div>
 </div>
 
-<!-- ====== NO INTERNET ====== -->
-<div id="noInternet" class="screen offline-prompt" style="display:none">
-  <div class="auth-bg"><div class="splash-blobs"><div class="sblob s1"></div><div class="sblob s2"></div></div></div>
-  <div class="offline-content">
-    <div class="offline-icon">📡</div>
-    <h2>اتصال به سرور برقرار نیست</h2>
-    <p>برای بازی آنلاین به اینترنت نیاز دارید. اما می‌توانید بازی آفلاین را امتحان کنید!</p>
-    <button class="btn-primary" onclick="AUTH.retryConnection()"><span>🔄 تلاش مجدد</span></button>
-    <button class="btn-secondary" onclick="AUTH.goOffline()"><span>🎮 ورود به بازی آفلاین</span></button>
-  </div>
-</div>
-
-<!-- ====== GAME APP ====== -->
-<div id="gameApp" class="screen game-app" style="display:none">
-  <header class="game-header glass">
-    <div class="hdr-row1">
-      <div class="hdr-crest" id="hdrCrest"></div>
-      <div class="hdr-info"><div class="hdr-club" id="hdrClub">—</div><div class="hdr-manager" id="hdrManager">—</div></div>
-      <div class="hdr-coins" id="hdrCoins"><span class="coin-icon">💰</span><span id="hdrBudget">۰</span></div>
+<!-- ══════════ ورود / ساخت باشگاه ══════════ -->
+<div id="auth" class="screen" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-hero">
+      <div class="logo"><div class="ball" id="authBall"></div></div>
+      <h2 id="authTitle">ورود به مدیر تیم</h2>
+      <p id="authDesc">با شماره‌ی موبایل وارد شو؛ تیمت روی سرور ذخیره می‌شود<br>و از هر دستگاهی ادامه می‌دهی.</p>
     </div>
-    <div class="hdr-row2">
-      <div class="hdr-stat"><span class="hs-label">🏆 رتبه</span><b id="hdrRank">-</b></div>
-      <div class="hdr-stat"><span class="hs-label">⭐ امتیاز</span><b id="hdrOvr">-</b></div>
-      <div class="hdr-stat"><span class="hs-label">😊 روحیه</span><b id="hdrMorale">-</b></div>
-      <div class="hdr-stat"><span class="hs-label">📅 هفته</span><b id="hdrWeek">-</b></div>
+
+    <!-- گام ۱: شماره -->
+    <div class="auth-step on" data-step="1">
+      <div class="field">
+        <label>شماره‌ی موبایل</label>
+        <div class="input-wrap"><span class="iw-ico">📱</span>
+          <input type="tel" id="authPhone" dir="ltr" inputmode="numeric" maxlength="11" placeholder="09123456789" autocomplete="tel">
+        </div>
+      </div>
+      <button id="btnSendOtp" class="btn primary wide" onclick="AUTH.sendOtp()">
+        <span class="btn-text">دریافت کد ورود</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span>
+      </button>
+      <div id="authError1" class="err"></div>
+      <div class="divider"><span>یا</span></div>
+      <button class="btn ghost wide" onclick="AUTH.goOffline()">🎮 بازی آفلاین (بدون اینترنت)</button>
+      <button class="link" onclick="AUTH.showServerSettings()">⚙️ تنظیم آدرس سرور</button>
     </div>
-  </header>
-  <main class="game-main" id="gameMain"></main>
-  <nav class="bottom-nav glass" id="bottomNav">
-    <button class="nav-btn active" data-tab="home" onclick="APP.switchTab('home')"><span class="nav-icon">🏠</span><span class="nav-label">خانه</span></button>
-    <button class="nav-btn" data-tab="squad" onclick="APP.switchTab('squad')"><span class="nav-icon">👥</span><span class="nav-label">تیم</span></button>
-    <button class="nav-btn" data-tab="market" onclick="APP.switchTab('market')"><span class="nav-icon">💱</span><span class="nav-label">بازار</span></button>
-    <button class="nav-btn" data-tab="league" onclick="APP.switchTab('league')"><span class="nav-icon">🏆</span><span class="nav-label">لیگ</span></button>
-    <button class="nav-btn" data-tab="club" onclick="APP.switchTab('club')"><span class="nav-icon">⚙️</span><span class="nav-label">باشگاه</span></button>
-  </nav>
-</div>
 
-<!-- ====== LIVE MATCH OVERLAY ====== -->
-<div id="matchOverlay" class="match-overlay" style="display:none">
-  <div class="match-overlay-inner">
-    <div class="match-close-btn" onclick="MATCH.close()">✕</div>
-    <div id="matchContent"></div>
+    <!-- گام ۲: کد تأیید -->
+    <div class="auth-step" data-step="2">
+      <div class="field">
+        <label>کد ۵ رقمی پیامک‌شده</label>
+        <div class="otp-row">
+          <input type="tel" maxlength="1" inputmode="numeric" class="otp-box" dir="ltr">
+          <input type="tel" maxlength="1" inputmode="numeric" class="otp-box" dir="ltr">
+          <input type="tel" maxlength="1" inputmode="numeric" class="otp-box" dir="ltr">
+          <input type="tel" maxlength="1" inputmode="numeric" class="otp-box" dir="ltr">
+          <input type="tel" maxlength="1" inputmode="numeric" class="otp-box" dir="ltr">
+        </div>
+      </div>
+      <div id="otpHint" class="tiny muted center"></div>
+      <button id="btnVerifyOtp" class="btn primary wide" onclick="AUTH.verifyOtp()" style="margin-top:12px">
+        <span class="btn-text">ورود</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span>
+      </button>
+      <div id="authError2" class="err"></div>
+      <button class="link" onclick="AUTH._step(1)">تغییر شماره</button>
+    </div>
+
+    <!-- گام ۳: ساخت باشگاه -->
+    <div class="auth-step" data-step="3">
+      <div class="field">
+        <label>نام باشگاه</label>
+        <div class="input-wrap"><span class="iw-ico">🏟️</span>
+          <input type="text" id="authClub" maxlength="22" placeholder="مثلاً آذرخش البرز">
+        </div>
+      </div>
+      <div id="authKit"></div>
+      <button id="btnCreateClub" class="btn primary wide" onclick="AUTH.createClub()">
+        <span class="btn-text">ساخت باشگاه و شروع بازی ⚽</span><span class="btn-loader" style="display:none"><span class="spinner"></span></span>
+      </button>
+      <div id="authError3" class="err"></div>
+      <div class="tiny muted center" style="margin-top:10px">با ساخت باشگاه، ۱۴ بازیکن شروع به تیمت اضافه می‌شود و می‌توانی لیگ آنلاین بسازی.</div>
+    </div>
+
+    <!-- تنظیم سرور -->
+    <div class="auth-step" data-step="9" id="authServerBox" style="display:none">
+      <div class="field">
+        <label>آدرس سرور بازی</label>
+        <div class="input-wrap"><span class="iw-ico">🌐</span>
+          <input type="url" id="authServerUrl" dir="ltr" placeholder="https://your-server.com">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="AUTH.saveServerSettings()">ذخیره و اتصال</button>
+        <button class="btn ghost" onclick="AUTH._step(1)">بازگشت</button>
+      </div>
+      <div class="tiny muted center" style="margin-top:10px">اگر بازی را از خود سرور باز کرده‌ای، این کادر را خالی بگذار.</div>
+    </div>
   </div>
 </div>
 
-<!-- ====== MODALS & TOASTS ====== -->
-<div id="modalOverlay" class="modal-overlay" style="display:none" onclick="APP.closeModal()"></div>
-<div id="modalBox" class="modal-box" style="display:none"></div>
-<div id="toastRoot" class="toast-root"></div>
-
-<!-- ====== OFFLINE FRAME ====== -->
-<div id="offlineFrame" class="screen offline-frame" style="display:none">
-  <div class="offline-topbar glass">
-    <button class="back-btn" onclick="APP.exitOffline()">← بازگشت به آنلاین</button>
-    <span class="offline-badge">🎮 حالت آفلاین</span>
+<!-- ══════════ بدون اینترنت ══════════ -->
+<div id="noInternet" class="screen" style="display:none">
+  <div class="auth-wrap center">
+    <div style="font-size:3rem">📡</div>
+    <h2 style="margin:6px 0">اتصال به سرور برقرار نیست</h2>
+    <p class="small muted" style="line-height:1.9">برای لیگ آنلاین به اینترنت نیاز داری. می‌توانی نسخه‌ی آفلاین را بازی کنی و بعداً برگردی.</p>
+    <button class="btn primary wide" onclick="AUTH.init()">🔄 تلاش مجدد</button>
+    <button class="btn ghost wide" style="margin-top:8px" onclick="AUTH.goOffline()">🎮 ورود به بازی آفلاین</button>
+    <button class="link" onclick="AUTH.showServerSettings()">⚙️ تغییر آدرس سرور</button>
   </div>
-  <iframe id="offlineIframe" src="about:blank"></iframe>
+</div>
+
+<!-- ══════════ اپ اصلی ══════════ -->
+<div id="gameApp" class="screen" style="display:none">
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="hdr-top">
+        <div class="hdr-crest" id="hdrCrest"></div>
+        <div class="hdr-id">
+          <div class="hdr-club" id="hdrClub">—</div>
+          <div class="hdr-sub" id="hdrManager">—</div>
+        </div>
+        <div class="hdr-actions">
+          <button class="icon-btn" onclick="APP.showNewsSheet()">🔔</button>
+          <button class="icon-btn" onclick="APP.switchTab('club')">⚙️</button>
+        </div>
+      </div>
+      <div class="hdr-stats" id="appHeaderStats"></div>
+      <div class="hdr-progress"><i id="hdrProgress" style="width:0%"></i></div>
+    </header>
+    <main class="app-main" id="gameMain"></main>
+    <nav class="app-nav">
+      <button class="nav-btn on" data-tab="home" onclick="APP.switchTab('home')"><span class="ni">🏠</span><span>خانه</span></button>
+      <button class="nav-btn" data-tab="team" onclick="APP.switchTab('team')"><span class="ni">👥</span><span>تیم</span></button>
+      <button class="nav-btn" data-tab="league" onclick="APP.switchTab('league')"><span class="ni">🏆</span><span>لیگ</span></button>
+      <button class="nav-btn" data-tab="market" onclick="APP.switchTab('market')"><span class="ni">💱</span><span>بازار</span></button>
+      <button class="nav-btn" data-tab="club" onclick="APP.switchTab('club')"><span class="ni">👤</span><span>باشگاه</span></button>
+    </nav>
+  </div>
+</div>
+
+<!-- ══════════ پخش زنده ══════════ -->
+<div id="liveRoot" style="display:none"></div>
+
+<!-- ══════════ شیت / مودال / توست ══════════ -->
+<div id="sheetRoot" style="display:none"></div>
+<div id="modalRoot" style="display:none"></div>
+<div id="toastRoot" class="toasts"></div>
+<div id="genericModal"></div>
+
+<!-- ══════════ قاب بازی آفلاین ══════════ -->
+<div id="offlineFrame" class="screen" style="display:none;z-index:30">
+  <div class="app-shell">
+    <div class="app-header">
+      <div class="hdr-top">
+        <button class="btn sm ghost" onclick="AUTH.exitOffline()">← بازگشت به بازی آنلاین</button>
+        <div class="hdr-id"><div class="hdr-club">🎮 حالت آفلاین</div>
+          <div class="hdr-sub">بازی تک‌نفره — پیشرفتت جدا ذخیره می‌شود</div></div>
+      </div>
+    </div>
+    <main class="app-main" style="padding-top:10px">
+      <iframe id="offlineIframe" src="about:blank" style="width:100%;height:100%;border:0;border-radius:18px;background:#080e1a"></iframe>
+    </main>
+  </div>
 </div>
 
 <script src="./js/util.js"></script>
 <script src="./js/svg.js"></script>
-<script src="./js/data.js"></script>
-<script src="./js/gen.js"></script>
-<script src="./js/engine.js"></script>
+<script src="./js/assets.js"></script>
+<script src="./js/net.js"></script>
+<script src="./js/live.js"></script>
 <script src="./js/app.js"></script>
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw-app.js').catch(() => {});
-  });
+/* چمن و توپ اسپلش (SVG درون‌خطی تا بدون تصویر هم زیبا باشد) */
+(function(){
+  const ball = ballArtSVG ? ballArtSVG() : '';
+  const b1 = document.getElementById('splashBall');
+  const b2 = document.getElementById('authBall');
+  if(b1) b1.innerHTML = ball;
+  if(b2) b2.innerHTML = ball;
+})();
+/* service worker: نسخه‌ی تازه‌ی اپ را همیشه از شبکه بگیر */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('./sw-app.js').catch(()=>{}); });
 }
 </script>
 </body>

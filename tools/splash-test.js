@@ -157,9 +157,14 @@ function boot({ token, fetchMode }) {
 
   const sandbox = {
     document, localStorage, console, fetch: fetchFn,
-    navigator: {},
-    location: { protocol: 'http:', origin: 'http://testhost', href: 'http://testhost/' },
+    navigator: { onLine: true },
+    location: { protocol: 'http:', origin: 'http://testhost', href: 'http://testhost/', reload(){} },
     setTimeout: setTimeoutFn, clearTimeout: clearTimeoutFn,
+    /* حلقه‌ی رویداد و APIهای مرورگری که اپ در زمان بارگذاری لمس می‌کند */
+    addEventListener(){}, removeEventListener(){},
+    matchMedia: ()=> ({ matches: false, addEventListener(){} }),
+    requestAnimationFrame: fn => setTimeoutFn(fn, 16), cancelAnimationFrame: clearTimeoutFn,
+    AbortController, history: { replaceState(){}, pushState(){} },
     setInterval: () => 0, clearInterval: () => {},
     alert: () => {}, confirm: () => true,
     JSON, Math, Date, Object, Array, String, Number, Boolean, RegExp, Error,

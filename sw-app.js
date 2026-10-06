@@ -1,13 +1,16 @@
 /* ============================================================
    sw-app.js — Service Worker for PWA (مدیر تیم)
    ============================================================ */
-const CACHE_NAME = 'manager-v3';
+const CACHE_NAME = 'manager-v4';
 const STATIC_ASSETS = [
   './index.html',
   './css/app.css',
   './js/app.js',
   './js/util.js',
   './js/svg.js',
+  './js/assets.js',
+  './js/net.js',
+  './js/live.js',
   './js/data.js',
   './js/gen.js',
   './js/engine.js',
@@ -31,12 +34,14 @@ const STATIC_ASSETS = [
   './service-worker.js'
 ];
 
-/* Install — cache static assets */
+/* Install — cache static assets
+   نکته: اگر یک فایل در دسترس نباشد، addAll کل نصب را رد می‌کند؛
+   پس هر فایل جدا و با catch اضافه می‌شود تا PWA هرگز قفل نشود. */
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CACHE_NAME).then(cache =>
+      Promise.all(STATIC_ASSETS.map(u => cache.add(u).catch(()=>{})))
+    )
   );
   self.skipWaiting();
 });
@@ -60,6 +65,18 @@ self.addEventListener('fetch', event => {
   // API calls — network only
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(event.request));
+    return;
+  }
+
+  /* پوسته‌ی اپ: اول شبکه (تا نسخه‌ی تازه بیاید)، بعد کش */
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put('./index.html', clone));
+        return response;
+      }).catch(() => caches.match('./index.html'))
+    );
     return;
   }
 
